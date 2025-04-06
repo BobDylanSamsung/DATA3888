@@ -1,0 +1,48 @@
+---
+title: "pancreatic_cancer"
+format: html
+editor: visual
+---
+
+```{r SETUP, echo=FALSE}
+
+library(GEOquery) 
+library(tidyr)
+```
+
+```{r GET_DATA, echo=FALSE}
+
+extract_gene_symbol <- function(gene_assignment) {
+  # Split the string by //
+  parts <- strsplit(gene_assignment, " // ")[[1]]
+  
+  # Return the second element (gene symbol)
+  if (length(parts) >= 2) {
+    return(trimws(parts[2]))
+  } else {
+    return(NA)
+  }
+}
+
+extract_gse_data <- function(gse) {
+  filteredFeatureData <- fData(gse) %>% filter(gene_assignment != "---")
+  filteredFeatureData$gene_symbol <- sapply(filteredFeatureData$gene_assignment, extract_gene_symbol)
+  return(list(
+    featureData = filteredFeatureData,
+    phenoData = pData(gse),
+    eMat = exprs(gse)
+  ))
+}
+
+GSE78229 <- getGEO("GSE78229")$GSE78229_series_matrix.txt.gz %>% extract_gse_data()
+GSE28735 <- getGEO("GSE28735")$GSE28735_series_matrix.txt.gz %>% extract_gse_data()
+GSE62452 <- getGEO("GSE62452")$GSE62452_series_matrix.txt.gz %>% extract_gse_data()
+
+
+```
+
+```{r}
+
+
+
+```
