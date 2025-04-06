@@ -25,10 +25,10 @@ extract_gene_symbol <- function(gene_assignment) {
 }
 
 extract_gse_data <- function(gse) {
-  filteredFeatureData <- fData(gse) %>% filter(gene_assignment != "---")
-  filteredFeatureData$gene_symbol <- sapply(filteredFeatureData$gene_assignment, extract_gene_symbol)
+  # filteredFeatureData <- fData(gse) %>% filter(gene_assignment != "---")
+  # filteredFeatureData$gene_symbol <- sapply(filteredFeatureData$gene_assignment, extract_gene_symbol)
   return(list(
-    featureData = filteredFeatureData,
+    featureData = fData(gse),
     phenoData = pData(gse),
     eMat = exprs(gse)
   ))
@@ -41,8 +41,67 @@ GSE62452 <- getGEO("GSE62452")$GSE62452_series_matrix.txt.gz %>% extract_gse_dat
 
 ```
 
-```{r}
+```{r GENE_INTERSECTION}
+find_shared_and_unique_genes <- function(gse1, gse2) {
+  genes1 <- rownames(gse1$eMat)
+  genes2 <- rownames(gse2$eMat)
+  
+  shared_genes <- intersect(genes1, genes2)
+  
+  unique_genes_1 <- setdiff(genes1, genes2)
+  unique_genes_2 <- setdiff(genes2, genes1)
+  
+   return(list(
+    size_dif = length(genes1) - length(genes2),
+    shared_genes_count = length(shared_genes),
+    shared_genes = shared_genes,
+    unique_1 = unique_genes_1,
+    unique_2 = unique_genes_2
+  )) 
+}
 
+result_GSE78229_GSE28735 <- find_shared_and_unique_genes(GSE78229, GSE28735)
+result_GSE78229_GSE62452 <- find_shared_and_unique_genes(GSE78229, GSE62452)
+result_GSE28735_GSE62452 <- find_shared_and_unique_genes(GSE28735, GSE62452)
 
+print(dim(GSE78229$eMat))
+print(dim(GSE62452$eMat))
+print(dim(GSE28735$eMat))
+```
+
+```{r COMBINE_EMAT}
+find_common_genes <- function(...) {
+  matrices <- list(...)
+  common_genes <- Reduce(intersect, lapply(matrices, rownames))
+  return(common_genes)
+}
+
+common_genes <- find_common_genes(GSE28735$eMat, GSE62452$eMat)
+
+# subset_eMat_GSE78229 <- GSE78229$eMat[common_genes, ]
+subset_eMat_GSE28735 <- GSE28735$eMat[common_genes, ]
+subset_eMat_GSE62452 <- GSE62452$eMat[common_genes, ]
+
+#combined_matrix <- cbind(subset_eMat_GSE78229, subset_eMat_GSE28735, subset_eMat_GSE62452)
+
+combined_matrix <- cbind(subset_eMat_GSE28735, subset_eMat_GSE62452)
+
+print(dim(combined_matrix))
+```
+
+```{r COMBINE_PHENO}
+
+phenos = c(GSE28735$phenoData, GSE62452$phenoData)
+
+common_columns <- intersect(colnames(GSE28735$phenoData), colnames(GSE62452$phenoData))
+
+unique_28735 <- setdiff(colnames(GSE28735$phenoData), colnames(GSE62452$phenoData))
+unique_62452 <- setdiff(colnames(GSE62452$phenoData), colnames(GSE28735$phenoData))
+
+unique_62452
+
+unique_28735
+
+common_columns
 
 ```
