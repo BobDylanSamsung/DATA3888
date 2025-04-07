@@ -89,19 +89,53 @@ combined_matrix <- cbind(subset_eMat_GSE28735, subset_eMat_GSE62452)
 print(dim(combined_matrix))
 ```
 
-```{r COMBINE_PHENO}
+```{r FILTER_28735_PHENO}
 
-phenos = c(GSE28735$phenoData, GSE62452$phenoData)
+GSE28735$phenoData$is_dead <- as.numeric(
+  replace(
+    GSE28735$phenoData$`cancer_death:ch1`, 
+    GSE28735$phenoData$`cancer_death:ch1` == "na", NA
+    )
+  )
 
-common_columns <- intersect(colnames(GSE28735$phenoData), colnames(GSE62452$phenoData))
+non_tumor_rows <- grepl("non-tumor tissue", GSE28735$phenoData$`source_name_ch1`)
 
-unique_28735 <- setdiff(colnames(GSE28735$phenoData), colnames(GSE62452$phenoData))
-unique_62452 <- setdiff(colnames(GSE62452$phenoData), colnames(GSE28735$phenoData))
+filtered_tumor <- GSE28735$phenoData[!non_tumor_rows, ]
 
-unique_62452
+filtered_28735 <- filtered_tumor[!is.na(filtered_tumor$is_dead), ] %>% rename(months_survived = `survival_month:ch1`)
 
-unique_28735
+nrow(filtered_28735)
+```
 
-common_columns
+```{r FILTER_62452_PHENO}
+GSE62452$phenoData$is_dead <- as.numeric(
+  replace(
+    GSE62452$phenoData$`survival status:ch1`,
+    GSE62452$phenoData$`survival status:ch1` %in% c("na", "?"), NA
+    )
+  )
 
+tumor_rows <- grepl("Pancreatic tumor", GSE62452$phenoData$`tissue:ch1`)
+
+filtered_tumor <- GSE62452$phenoData[tumor_rows, ]
+
+filtered_62452 <- filtered_tumor[!is.na(filtered_tumor$is_dead), ] %>%
+  rename(months_survived = `survival months:ch1`)
+
+nrow(filtered_62452)
+```
+
+```{r COMBINE_PHENO_DATA}
+library(dplyr)
+
+combined_pheno <- bind_rows(filtered_28735, filtered_62452)
+filtered_matrix <- combined_matrix[, colnames(combined_matrix) %in% rownames(combined_pheno)]
+
+dim(filtered_matrix)
+
+gse <- list(
+  featureData = GSE28735$featureData,
+  phenoData = combined_pheno,
+  eMat = filtered_matrix
+)
 ```
