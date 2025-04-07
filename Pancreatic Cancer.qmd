@@ -139,3 +139,74 @@ gse <- list(
   eMat = filtered_matrix
 )
 ```
+
+```{r LINEAR_REGRESSION}
+library(caret)
+
+set.seed(3888)
+
+n_samples <- nrow(gse$phenoData)
+
+train_indices <- createDataPartition(gse$phenoData$months_survived, p = 0.8, list = FALSE)
+train_data <- gse$phenoData[train_indices, ]
+train_eMat <- gse$eMat[, train_indices]
+
+validation_data <- gse$phenoData[-train_indices, ]
+validation_eMat <- gse$eMat[, -train_indices]
+
+train_df <- data.frame(months_survived = train_data$months_survived, t(train_eMat))
+
+train_control <- trainControl(method = "cv", number = 5)
+
+model <- train(months_survived ~ ., data = train_df, method = "lm", trControl = train_control)
+
+validation_df <- data.frame(t(validation_eMat))
+
+predictions <- predict(model, newdata = validation_df)
+
+rmse <- RMSE(predictions, validation_data$months_survived)
+r2 <- R2(predictions, validation_data$months_survived)
+
+# Output the results
+cat("Validation RMSE:", rmse, "\n")
+cat("Validation R-squared:", r2, "\n")
+```
+
+```{r}
+library(glmnet)
+
+# Prepare the data for glmnet
+x_train <- as.matrix(t(train_eMat))
+# Ensure the response variable is numeric
+y_train <- as.numeric(train_data$months_survived)
+
+# Ensure the predictor matrix is numeric
+x_train <- as.matrix(t(train_eMat))
+x_train <- apply(x_train, 2, as.numeric)
+
+# Fit a Lasso model
+lasso_model <- cv.glmnet(x_train, y_train, alpha = 1)
+
+# Prepare the validation data
+x_validation <- as.matrix(t(validation_eMat))
+x_validation <- apply(x_validation, 2, as.numeric)
+
+# Ensure the response variable in the validation set is numeric and has no missing values
+observed_values <- as.numeric(validation_data$months_survived)
+
+# Ensure predictions are numeric
+predictions <- as.numeric(predict(lasso_model, newx = x_validation, s = "lambda.min"))
+
+# Check the lengths of the vectors
+if (length(predictions) != length(observed_values)) {
+  stop("The number of predictions does not match the number of observed values.")
+}
+
+# Calculate RMSE and R-squared for the validation set
+rmse <- RMSE(predictions, observed_values)
+r2 <- R2(predictions, observed_values)
+
+# Output the results
+cat("Validation RMSE:", rmse, "\n")
+cat("Validation R-squared:", r2, "\n")
+```
