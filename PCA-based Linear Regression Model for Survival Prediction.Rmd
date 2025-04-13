@@ -1,0 +1,47 @@
+---
+title: "PCA-based Linear Regression Model for Survival Prediction"
+author: "Zhantao Shi"
+date: "`r Sys.Date()`"
+output: html_document
+---
+I use Principal Component Analysis to compress thousands of gene data into a few principal components that best represent the overall information. Then, select from these components those that are significantly related to the patients' survival time. Finally, i build a linear regression model using these key components to predict the patients' survival time. This process reduces the data's dimensionality and filters out irrelevant noise, thereby improving the accuracy and stability of the predictions.
+```{r MODEL, echo=TRUE, warning=FALSE, message=FALSE}
+library(caret)
+library(dplyr)
+library(GEOquery) 
+library(tidyr)
+
+# PCA dimensional reduction
+expr_data <- t(gse$eMat)
+pca_res <- prcomp(expr_data, center = TRUE, scale. = TRUE)
+pc_data <- as.data.frame(pca_res$x)
+pc_data$months_survived <- as.numeric(as.character(gse$phenoData$months_survived))
+
+# The principal components significantly correlated with survival time were screened
+sig_pcs <- c()
+for (pc in colnames(pc_data)[1:(ncol(pc_data)-1)]) {
+  if (cor.test(pc_data[[pc]], pc_data$months_survived)$p.value < 0.05) {
+    sig_pcs <- c(sig_pcs, pc)
+  }
+}
+cat("Significant PCs:", sig_pcs, "\n")
+
+# Partition data set
+set.seed(3888)
+train_indices <- createDataPartition(pc_data$months_survived, p = 0.8, list = FALSE)
+train_pc <- pc_data[train_indices, ]
+validation_pc <- pc_data[-train_indices, ]
+
+# Construct a linear regression model based on PCA
+model_formula <- as.formula(paste("months_survived ~", paste(sig_pcs, collapse = " + ")))
+model_pca <- lm(model_formula, data = train_pc)
+print(summary(model_pca))
+
+# Forecast and calculate metrics
+predictions_pca <- predict(model_pca, newdata = validation_pc)
+rmse_pca <- RMSE(predictions_pca, validation_pc$months_survived)
+r2_pca <- R2(predictions_pca, validation_pc$months_survived)
+cat("Validation RMSE:", rmse_pca, "\n")
+cat("Validation R-squared:", r2_pca, "\n")
+
+```
