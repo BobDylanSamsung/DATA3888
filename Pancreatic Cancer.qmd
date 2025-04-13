@@ -140,73 +140,56 @@ gse <- list(
 )
 ```
 
-```{r LINEAR_REGRESSION}
-library(caret)
+```{r MDRF_FEATURE_SELECTION}
+library(randomForestSRC)
 
-set.seed(3888)
+gse$phenoData$months_survived <- as.factor(gse$phenoData$months_survived)
 
-n_samples <- nrow(gse$phenoData)
+  
+# Expression matrix: genes as columns, samples as rows
+expr_df <- as.data.frame(t(gse$eMat))
+expr_df$sample_id <- rownames(expr_df)
 
-train_indices <- createDataPartition(gse$phenoData$months_survived, p = 0.8, list = FALSE)
-train_data <- gse$phenoData[train_indices, ]
-train_eMat <- gse$eMat[, train_indices]
+# Phenotype data
+pheno <- gse$phenoData
+pheno$sample_id <- rownames(pheno)
 
-validation_data <- gse$phenoData[-train_indices, ]
-validation_eMat <- gse$eMat[, -train_indices]
+# Merge to create the full dataset
+merged_data <- merge(expr_df, pheno[, c("sample_id", "months_survived", "is_dead")], by = "sample_id")
+merged_data$sample_id <- NULL
 
-train_df <- data.frame(months_survived = train_data$months_survived, t(train_eMat))
+# Run survival forest model
+set.seed(42)
+rf_model <- rfsrc(Surv(months_survived, is_dead) ~ ., data = merged_data, ntree = 500, forest = TRUE)
 
-train_control <- trainControl(method = "cv", number = 5)
+# Compute minimum depth of each variable
+md_info <- max.subtree(rf_model)$order[, 1]  # gives a named vector: variable -> depth
 
-model <- train(months_survived ~ ., data = train_df, method = "lm", trControl = train_control)
+# Sort and select top genes (e.g., top 50)
+top_genes <- names(sort(md_info))[1:50]
 
-validation_df <- data.frame(t(validation_eMat))
-
-predictions <- predict(model, newdata = validation_df)
-
-rmse <- RMSE(predictions, validation_data$months_survived)
-r2 <- R2(predictions, validation_data$months_survived)
-
-# Output the results
-cat("Validation RMSE:", rmse, "\n")
-cat("Validation R-squared:", r2, "\n")
 ```
 
-```{r}
-library(glmnet)
+```{r VISUALISE_FS}
 
-# Prepare the data for glmnet
-x_train <- as.matrix(t(train_eMat))
-# Ensure the response variable is numeric
-y_train <- as.numeric(train_data$months_survived)
+# Already computed this before:
+md_info <- max.subtree(rf_model)$order[, 1]
 
-# Ensure the predictor matrix is numeric
-x_train <- as.matrix(t(train_eMat))
-x_train <- apply(x_train, 2, as.numeric)
+# Sort and make a dataframe
+md_df <- data.frame(
+  gene = names(md_info),
+  depth = as.numeric(md_info)
+)
+top_md_df <- md_df[order(md_df$depth), ][1:30, ]  # top 30
 
-# Fit a Lasso model
-lasso_model <- cv.glmnet(x_train, y_train, alpha = 1)
+# Barplot
+library(ggplot2)
 
-# Prepare the validation data
-x_validation <- as.matrix(t(validation_eMat))
-x_validation <- apply(x_validation, 2, as.numeric)
+ggplot(top_md_df, aes(x = reorder(gene, -depth), y = depth)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top Genes by Minimum Depth",
+       x = "Gene", y = "Minimum Depth")
 
-# Ensure the response variable in the validation set is numeric and has no missing values
-observed_values <- as.numeric(validation_data$months_survived)
 
-# Ensure predictions are numeric
-predictions <- as.numeric(predict(lasso_model, newx = x_validation, s = "lambda.min"))
-
-# Check the lengths of the vectors
-if (length(predictions) != length(observed_values)) {
-  stop("The number of predictions does not match the number of observed values.")
-}
-
-# Calculate RMSE and R-squared for the validation set
-rmse <- RMSE(predictions, observed_values)
-r2 <- R2(predictions, observed_values)
-
-# Output the results
-cat("Validation RMSE:", rmse, "\n")
-cat("Validation R-squared:", r2, "\n")
 ```
