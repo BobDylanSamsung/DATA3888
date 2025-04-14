@@ -1,0 +1,51 @@
+---
+title: "Cox Model"
+author: "Zhantao Shi"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+library(survival)
+library(glmnet)
+library(survminer)
+library(caret)
+
+# Construct survival object: assume that 'months_survived' in gse$phenoData is the survival time (numeric) and 'is_dead' is the event status (1 = death, 0 = censored)
+surv_obj <- with(gse$phenoData, Surv(as.numeric(months_survived), as.numeric(is_dead)))
+
+## Penalized Cox Model (suitable for high-dimensional data)
+# Build the prediction model using all 28869 genes (or your filtered genes)
+
+# Prepare the prediction matrix x: note that the columns in gse$eMat represent samples; after transposition, rows represent samples and columns represent features
+x <- t(gse$eMat)
+x <- as.matrix(x)
+
+# Fit the Cox model with Lasso penalty using cross-validation
+set.seed(1234)
+cvfit <- cv.glmnet(x, surv_obj, family = "cox", alpha = 1)
+plot(cvfit, main = "Cross-validation for Penalized Cox Model")
+best_lambda <- cvfit$lambda.min
+cat("Best lambda:", best_lambda, "\n")
+
+# Fit the final model using the optimal lambda
+final_model <- glmnet(x, surv_obj, family = "cox", alpha = 1, lambda = best_lambda)
+coef_final <- coef(final_model)
+cat("Non-zero coefficients in the final model:\n")
+print(coef_final[coef_final != 0])
+
+# Compute the risk scores for each sample (linear predictor)
+risk_scores <- predict(final_model, newx = x, type = "link")
+# Divide the samples into high-risk and low-risk groups by using the median risk score as the cutoff
+risk_group <- ifelse(risk_scores > median(risk_scores), "High", "Low")
+
+# Add the risk group information to the original phenotype data
+gse$phenoData$risk_group <- factor(risk_group, levels = c("Low", "High"))
+
+# Use the Kaplan-Meier method to compare the survival curves of the two risk groups
+fit_km <- survfit(surv_obj ~ risk_group, data = gse$phenoData)
+ggsurvplot(fit_km, data = gse$phenoData, pval = TRUE, risk.table = TRUE, 
+           title = "Kaplan-Meier Survival Curves by Risk Group")
+
+```
+
