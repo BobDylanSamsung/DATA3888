@@ -172,15 +172,12 @@ top_genes <- names(sort(md_info))[1:50]
 
 ```{r VISUALISE_FS}
 
-# Already computed this before:
-md_info <- max.subtree(rf_model)$order[, 1]
-
 # Sort and make a dataframe
 md_df <- data.frame(
   gene = names(md_info),
   depth = as.numeric(md_info)
 )
-top_md_df <- md_df[order(md_df$depth), ][1:30, ]  # top 30
+top_md_df <- md_df[order(md_df$depth), ][1:30, ]
 
 # Barplot
 library(ggplot2)
@@ -192,4 +189,98 @@ ggplot(top_md_df, aes(x = reorder(gene, -depth), y = depth)) +
        x = "Gene", y = "Minimum Depth")
 
 
+```
+
+```{r}
+library("survival")
+library("survminer")
+# Transpose expression matrix: samples as rows
+expr_data <- as.data.frame(t(gse$eMat[top_genes, ]))
+
+dim(expr_data)
+
+# Add survival info
+expr_data$time <- as.numeric(gse$phenoData$months_survived)
+expr_data$status <- as.numeric(gse$phenoData$is_dead)
+
+# Sanitize column names (recommended)
+colnames(expr_data) <- make.names(colnames(expr_data))
+
+# Also sanitize your gene list accordingly
+top_genes_clean <- make.names(top_genes)
+
+# Build formula again with cleaned names
+cox_formula <- as.formula(paste("Surv(time, status) ~", paste(top_genes_clean, collapse = " + ")))
+
+# Fit the model
+cox_model <- coxph(cox_formula, data = expr_data)
+
+# Summary of results
+summary(cox_model)
+
+ggforest(cox_model, data = expr_data, 
+         main = "Hazard Ratios for Top Genes",
+         cpositions = c(0.02, 0.22, 0.4))
+
+```
+
+```{r}
+library("CoxBoost")
+
+time <- expr_data$time
+status <- expr_data$status
+gene_data <- expr_data[, -c(which(names(expr_data) %in% c("time", "status")))]
+
+set.seed(3888) 
+coxboost_model <- CoxBoost(time = time, status = status, x = as.matrix(gene_data), stepno = 100)
+
+summary(coxboost_model)
+
+plot(coxboost_model)
+
+coefficients <- coef(coxboost_model)
+print(coefficients)
+```
+
+```{r}
+# Load necessary libraries
+library(CoxBoost)
+library(survival)
+library(survminer)
+
+# Assuming expr_data is your dataset with survival information and gene expression data
+# expr_data$time: survival time
+# expr_data$status: event status (1 if event occurred, 0 otherwise)
+# expr_data: gene expression data
+
+# Prepare the data
+time <- expr_data$time
+status <- expr_data$status
+gene_data <- expr_data[, -c(which(names(expr_data) %in% c("time", "status")))]
+
+# Fit the CoxBoost model
+set.seed(123) # For reproducibility
+coxboost_model <- CoxBoost(time = time, status = status, x = as.matrix(gene_data), stepno = 100)
+
+# Create a survival object
+surv_obj <- Surv(time, status)
+
+# Fit a baseline survival curve
+base_coxph <- coxph(surv_obj ~ 1)  # Fit a null model
+base_surv <- survfit(base_coxph)
+
+# Predict the linear predictor
+lp <- predict(coxboost_model, newdata = as.matrix(gene_data), type = "lp")
+
+# Calculate survival probabilities for each individual
+surv_probs <- sapply(1:nrow(gene_data), function(i) {
+  base_surv$surv ^ exp(lp[i])
+})
+
+# Plot the average survival curve
+avg_surv_probs <- rowMeans(surv_probs)
+
+plot(base_surv$time, avg_surv_probs, type = "l", col = "blue",
+     xlab = "Time", ylab = "Probability of Survival",
+     main = "Average Survival Probability Over Time")
 ```
