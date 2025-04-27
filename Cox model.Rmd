@@ -1,6 +1,6 @@
 ---
 title: "Cox Model"
-author: "Zhantao Shi"
+author: "Zhantao"
 date: "`r Sys.Date()`"
 output: html_document
 ---
@@ -10,30 +10,85 @@ library(survival)
 library(glmnet)
 library(survminer)
 library(caret)
+```
 
-# Construct survival object: assume that 'months_survived' in gse$phenoData is the survival time (numeric) and 'is_dead' is the event status (1 = death, 0 = censored)
+
+
+# Choose λ 
+
+```{r}
+# Construct survival object: assume that 'months_survived' in gse$phenoData is the survival time (numeric) and 'is_dead' is the event status (1 = death, 0 = survival)
 surv_obj <- with(gse$phenoData, Surv(as.numeric(months_survived), as.numeric(is_dead)))
 
-## Penalized Cox Model (suitable for high-dimensional data)
-# Build the prediction model using all 28869 genes (or your filtered genes)
-
-# Prepare the prediction matrix x: note that the columns in gse$eMat represent samples; after transposition, rows represent samples and columns represent features
+## Penalized Cox Model
+# Build the prediction model using all 28869 genes 
+# Prepare the prediction matrix x: the columns in gse$eMat represent samples; after transposition, rows represent samples and columns represent features
 x <- t(gse$eMat)
 x <- as.matrix(x)
 
 # Fit the Cox model with Lasso penalty using cross-validation
-set.seed(1234)
+set.seed(3888)
 cvfit <- cv.glmnet(x, surv_obj, family = "cox", alpha = 1)
 plot(cvfit, main = "Cross-validation for Penalized Cox Model")
 best_lambda <- cvfit$lambda.min
-cat("Best lambda:", best_lambda, "\n")
+```
 
+
+Horizontal axis: Log(λ). When λ gets larger (to the left), the penalty becomes stronger and the model becomes more sparse. When λ gets smaller (to the right), the penalty becomes weaker and more genes are kept.
+
+Vertical axis: Partial Likelihood Deviance. A smaller value means the model fits better.
+
+Each red dot shows the average deviance for a λ value. The gray lines show the range of error across different folds.
+
+The left dashed line shows λ.min, where the error is the smallest and the model fits the best.
+
+The right dashed line shows λ.1se, which gives a slightly stronger penalty. It makes the model simpler and uses fewer genes.
+
+We chose the λ.min on the left dashed line, which is 0.2227.
+
+```{r}
+cat("Best lambda:", best_lambda, "\n")
+```
+
+Through model calculation, the optimal λ value is 0.256105. This is the best choice for the Lasso penalty strength. Under this penalty, the model automatically shrinks the coefficients of many genes to zero, keeping only a small number of genes that are significantly related to survival.
+
+# Build Cox model and visualization
+```{r}
 # Fit the final model using the optimal lambda
 final_model <- glmnet(x, surv_obj, family = "cox", alpha = 1, lambda = best_lambda)
 coef_final <- coef(final_model)
-cat("Non-zero coefficients in the final model:\n")
-print(coef_final[coef_final != 0])
 
+cat("Non-zero coefficients in the final model:\n")
+nz_idx <- which(coef_final != 0)
+df <- data.frame(gene_id = colnames(x)[nz_idx],
+  coef    = as.numeric(coef_final[nz_idx]))
+print(df)
+```
+
+After training the model, a total of 22 genes were selected.
+
+The absolute value of each gene's coefficient reflects its contribution to the risk score: the larger the absolute value, the higher the weight of the gene in the model and the more important it is for distinguishing prognosis.
+
+This can be seen more clearly in the figure.
+```{r}
+library(ggplot2)
+ggplot(df, aes(x = reorder(gene_id, coef), y = coef, fill = coef > 0)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_manual(values = c("red","blue"), labels = c("high-risk gene","protective gene")) +
+  labs(x = NULL, y = "coef", title = "Lasso-Cox gene id") +
+  theme_minimal()
+
+```
+
+
+A positive coefficient means that higher expression of the gene is associated with a higher risk of death, indicating a high-risk gene. This suggests that the gene may be promoting disease progression.
+
+A negative coefficient means that higher expression of the gene is associated with a lower risk of death, indicating a protective gene. These genes may help slow down disease progression.
+
+# Result visualization
+
+```{r}
 # Compute the risk scores for each sample (linear predictor)
 risk_scores <- predict(final_model, newx = x, type = "link")
 # Divide the samples into high-risk and low-risk groups by using the median risk score as the cutoff
@@ -46,6 +101,15 @@ gse$phenoData$risk_group <- factor(risk_group, levels = c("Low", "High"))
 fit_km <- survfit(surv_obj ~ risk_group, data = gse$phenoData)
 ggsurvplot(fit_km, data = gse$phenoData, pval = TRUE, risk.table = TRUE, 
            title = "Kaplan-Meier Survival Curves by Risk Group")
-
 ```
 
+
+Risk grouping: Patients were divided into "low-risk group" (red) and "high-risk group" (cyan) based on the median risk score of all samples.
+
+Kaplan–Meier curve: The horizontal axis shows follow-up time (months), and the vertical axis shows survival probability.
+
+The red curve stays above the cyan curve at all times, indicating that patients in the low-risk group have a much higher survival rate compared to those in the high-risk group.
+
+Log-rank test p-value: p < 0.0001, showing that the difference between the two survival curves is statistically highly significant. This means that the risk score based on the 29 selected genes can clearly distinguish between good and poor prognosis.
+
+Risk table (Number at risk): Shown below the curves, it displays the number of patients still under follow-up at each time point, helping to evaluate the reliability of survival estimates in later stages.
