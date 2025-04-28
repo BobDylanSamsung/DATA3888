@@ -44,7 +44,7 @@ The left dashed line shows λ.min, where the error is the smallest and the model
 
 The right dashed line shows λ.1se, which gives a slightly stronger penalty. It makes the model simpler and uses fewer genes.
 
-We chose the λ.min on the left dashed line, which is 0.2227.
+We chose the λ.min on the left dashed line, which is 0.256105.
 
 ```{r}
 cat("Best lambda:", best_lambda, "\n")
