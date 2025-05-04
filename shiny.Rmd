@@ -109,14 +109,85 @@ ui <- fluidPage(
     ),
     mainPanel(
       tabsetPanel(
-        tabPanel("Predict Outcome",
-          # Model plots (shown before prediction)
-          conditionalPanel(
-            "output.show_model_plots == true",
-            plotOutput("lambda_plot"),
-            plotOutput("coef_plot")
-          ),
-          # Prediction outputs (shown after prediction)
+        tabPanel("Model", 
+                 # Lambda plot, explanations, and stats
+                 h4("Lambda Cross-Validation Plot"),
+                 tags$div(
+                   tags$a(
+                     "Show explanation",
+                     href = "#",
+                     `data-toggle` = "collapse",
+                     `data-target` = "#lambda-expl",
+                     class = "btn btn-link"
+                   ),
+                   tags$div(
+                     id = "lambda-expl",
+                     class = "collapse",
+                     HTML("
+                     <b>Horizontal axis:</b> Log(λ). When λ gets larger (to the left), the penalty becomes stronger and the model becomes more sparse. When λ gets smaller (to the right), the penalty becomes weaker and more genes are kept.<br>
+                     <b>Vertical axis:</b> Partial Likelihood Deviance. A smaller value means the model fits better.<br>
+                     Each red dot shows the average deviance for a λ value. The gray lines show the range of error across folds.<br>
+                     The left dashed line shows λ.min, where the error is the smallest. The right dashed line shows λ.1se.<br>
+                     We chose λ.min for our model (see below).<br>
+                     ")
+                   )
+                 ),
+                 plotOutput("lambda_plot"),
+                 textOutput("lambda_summary"),
+
+                 tags$hr(),
+
+                 # Coefficient plot, explanation, and stats
+                 h4("Lasso-Cox Gene Coefficients"),
+                 tags$div(
+                   tags$a(
+                     "Show explanation",
+                     href = "#",
+                     `data-toggle` = "collapse",
+                     `data-target` = "#coef-expl",
+                     class = "btn btn-link"
+                   ),
+                   tags$div(
+                     id = "coef-expl",
+                     class = "collapse",
+                     HTML("
+                     The absolute value of each gene's coefficient reflects its contribution to the risk score: the larger the value, the more important for distinguishing prognosis.<br>
+                     <span style='color:blue'><b>Blue bars</b></span> indicate protective genes (negative coefficient): higher expression, lower risk.<br>
+                     <span style='color:red'><b>Red bars</b></span> indicate high-risk genes (positive coefficient): higher expression, higher risk.<br>
+                     ")
+                   )
+                 ),
+                 plotOutput("coef_plot"),
+                 textOutput("n_selected_genes"),
+                 # Kaplan-Meier Survival Curves by Risk Group Plot
+                  h4("Kaplan-Meier Survival Curves by Risk Group"),
+                  tags$div(
+                    tags$a(
+                      "Show explanation",
+                      href = "#",
+                      `data-toggle` = "collapse",
+                      `data-target` = "#km-expl",
+                      class = "btn btn-link"
+                    ),
+                    tags$div(
+                      id = "km-expl",
+                      class = "collapse",
+                      HTML("
+                          Risk grouping: Patients were divided into 'low-risk group' (red) and 'high-risk group' (cyan) based on the median risk score of all samples. <br>
+    
+    Kaplan–Meier curve: The horizontal axis shows follow-up time (months), and the vertical axis shows survival probability.<br>
+    
+    The red curve stays above the cyan curve at all times, indicating that patients in the low-risk group have a much higher survival rate compared to those in the high-risk group.<br>
+    
+    Log-rank test p-value: p < 0.0001, showing that the difference between the two survival curves is statistically highly significant. This means that the risk score based on the 29 selected genes can clearly distinguish between good and poor prognosis.<br>
+    
+    Risk table (Number at risk): Shown below the curves, it displays the number of patients still under follow-up at each time point, helping to evaluate the reliability of survival estimates in later stages.
+                      ")
+                    )
+                  ),
+    plotOutput("model_km_plot"),
+        ),
+        tabPanel("Prediction", 
           conditionalPanel(
             "output.show_model_plots == false",
             verbatimTextOutput("risk_text"),
@@ -136,55 +207,69 @@ ui <- fluidPage(
 # Server Logic
 #--------------------------------------------------------
 server <- function(input, output, session) {
-  # For controlling UI
-  # changes to true when prediction is made. Renders model plots or prediction plots
-  pred_made <- reactiveVal(FALSE)  
+  # Flag for whether we are showing the model or prediction
+  pred_made <- reactiveVal(FALSE)
   output$show_model_plots <- reactive({ !pred_made() })
   outputOptions(output, "show_model_plots", suspendWhenHidden = FALSE)
   
-  # MODEL PLOTS
   output$lambda_plot <- renderPlot({
     plot(cvfit, main = "Cross-validation for Penalized Cox Model")
   })
+  output$lambda_summary <- renderText({
+    paste0(
+      "Best λ by cross-validation (λ.min): ", signif(best_lambda,5), ". ",
+      "This value selected ", nrow(gene_coefs), " predictors (genes) for the final model."
+    )
+  })
+  
   output$coef_plot <- renderPlot({
     ggplot(gene_coefs, aes(x = reorder(gene, coef), y = coef, fill = coef > 0)) +
       geom_col() +
       coord_flip() +
       scale_fill_manual(values = c("red", "blue"),
                        labels = c("high-risk gene","protective gene")) +
-      labs(x = NULL, y = "coef", title = "Lasso-Cox gene id") +
+      labs(x = NULL, y = "Coefficient", title = "Lasso-Cox gene coefficients") +
       theme_minimal()
   })
+  output$n_selected_genes <- renderText({
+    ng <- nrow(gene_coefs)
+    paste0("After training, a total of ", ng, " genes were selected. ",
+           "The model has ", sum(gene_coefs$coef > 0), " high-risk (positive) and ",
+           sum(gene_coefs$coef < 0), " protective (negative) genes.")
+  })
+  output$model_km_plot <- renderPlot({
+    survminer::ggsurvplot(fit_km, data = train_df, pval = TRUE, risk.table = TRUE,
+                          palette = c("red", "cyan"),
+                          title = "Kaplan-Meier Survival Curves by Risk Group")
+  })
+
 
   observeEvent(input$predict, {
     req(input$gene_csv)
     pred_made(TRUE)
-    
     df <- read.csv(input$gene_csv$datapath, header = FALSE, stringsAsFactors = FALSE)
   
-    #The first row contains patientID header info — remove that row
+    # Remove CSV header row
     df <- df[-1, , drop = FALSE]
-    
-    genes <- df[[1]]               # first column = gene names
-    values <- as.numeric(df[[2]])  # second column = numeric values
-    names(values) <- genes         # associate each value to its gene name
+    genes <- df[[1]]
+    values <- as.numeric(df[[2]])
+    names(values) <- genes
     
     newdata <- as.data.frame(t(values[selected_genes]))
     colnames(newdata) <- selected_genes
   
-    # PREDICT USING CSV DF
+    # Predict
     risk_score <- predict(coxph_model, newdata = newdata, type = "lp")
     risk_group <- ifelse(risk_score > cutoff, "High", "Low")
     hr <- exp(risk_score)
     fit_new <- survfit(coxph_model, newdata = newdata)
-  
     output$risk_text <- renderText({ paste0("Risk Score: ", round(risk_score, 3)) })
-    output$group_text <- renderText({ paste0("Risk Group(High/Low): ", risk_group) })
-    output$hr_text <- renderText({ paste0("(Hazard ratio): ", round(hr, 3)) })
+    output$group_text <- renderText({ paste0("Risk Group (High/Low): ", risk_group) })
+    output$hr_text <- renderText({ paste0("Hazard ratio: ", round(hr, 3)) })
     output$median_text <- renderText({
       idx <- which.min(abs(fit_new$surv - 0.5))
       med_time <- round(fit_new$time[idx], 1)
-      paste0("Predict the median survival time: ", med_time, " Month")
+      paste0("Predicted median survival time: ", med_time, " months")
     })
     output$prob_table <- renderTable({
       times <- c(6, 12, 24, 36)
@@ -194,7 +279,12 @@ server <- function(input, output, session) {
         Survival_Prob = round(surv_summary$surv, 3)
       )
     })
+    # Optional: render a prediction plot if available!
+    # output$pred_plot <- renderPlot({ ... })
   })
+
+  # Reset to model plots if file re-uploaded
+  observeEvent(input$gene_csv, pred_made(FALSE))
 }
 
 # Launch the app
