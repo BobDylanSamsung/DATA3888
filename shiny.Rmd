@@ -109,6 +109,7 @@ ui <- fluidPage(
     ),
     mainPanel(
       tabsetPanel(
+        id="main_tabs",
         tabPanel("Model", 
                  # Lambda plot, explanations, and stats
                  h4("Lambda Cross-Validation Plot"),
@@ -195,7 +196,8 @@ ui <- fluidPage(
             verbatimTextOutput("hr_text"),
             verbatimTextOutput("median_text"),
             tableOutput("prob_table"),
-            plotOutput("pred_plot")
+            plotOutput("pred_plot"),
+            plotOutput("pred_risk_hist")   
           )
         )
       ), width = 9
@@ -207,6 +209,7 @@ ui <- fluidPage(
 # Server Logic
 #--------------------------------------------------------
 server <- function(input, output, session) {
+  pred_result <- reactiveValues()
   # Flag for whether we are showing the model or prediction
   pred_made <- reactiveVal(FALSE)
   output$show_model_plots <- reactive({ !pred_made() })
@@ -242,11 +245,31 @@ server <- function(input, output, session) {
                           palette = c("red", "cyan"),
                           title = "Kaplan-Meier Survival Curves by Risk Group")
   })
+  
+  output$pred_plot <- renderPlot({
+  req(pred_result$fit_new)
+  plot(pred_result$fit_new,
+       xlab = "Months",
+       ylab = "Predicted survival probability",
+       main = "Patient's Predicted Survival Curve",
+       col = "blue", lwd = 2)
+  abline(h = 0.5, col = "red", lty = 2)
+})
+  
+  # Cohort risk score histogram
+  output$pred_risk_hist <- renderPlot({
+    req(pred_result$risk_score)
+    hist(train_lp, breaks=30, xlab="Risk score",
+         main="Risk score distribution (cohort)", col="lightgray")
+    abline(v = as.numeric(pred_result$risk_score), col = "red", lwd = 3)
+    legend("topright", legend = "This patient", col = "red", lwd = 2)
+  })
 
 
   observeEvent(input$predict, {
     req(input$gene_csv)
     pred_made(TRUE)
+    updateTabsetPanel(session, "main_tabs", selected = "Prediction")
     df <- read.csv(input$gene_csv$datapath, header = FALSE, stringsAsFactors = FALSE)
   
     # Remove CSV header row
@@ -259,21 +282,34 @@ server <- function(input, output, session) {
     colnames(newdata) <- selected_genes
   
     # Predict
-    risk_score <- predict(coxph_model, newdata = newdata, type = "lp")
-    risk_group <- ifelse(risk_score > cutoff, "High", "Low")
-    hr <- exp(risk_score)
-    fit_new <- survfit(coxph_model, newdata = newdata)
-    output$risk_text <- renderText({ paste0("Risk Score: ", round(risk_score, 3)) })
-    output$group_text <- renderText({ paste0("Risk Group (High/Low): ", risk_group) })
-    output$hr_text <- renderText({ paste0("Hazard ratio: ", round(hr, 3)) })
+    # PREDICTION
+    pred_result$risk_score <- predict(coxph_model, newdata = newdata, type = "lp")
+    pred_result$risk_group <- ifelse(pred_result$risk_score > cutoff, "High", "Low")
+    pred_result$hr <- exp(pred_result$risk_score)
+    pred_result$fit_new <- survfit(coxph_model, newdata = newdata)
+    pred_result$newdata <- newdata 
+    output$risk_text <- renderText({
+      req(pred_result$risk_score)
+      paste0("Risk Score: ", round(pred_result$risk_score, 3))
+    })
+    output$group_text <- renderText({
+      req(pred_result$risk_group)
+      paste0("Risk Group (High/Low): ", pred_result$risk_group)
+    })
+    output$hr_text <- renderText({
+      req(pred_result$hr)
+      paste0("Hazard ratio: ", round(pred_result$hr, 3))
+    })
     output$median_text <- renderText({
-      idx <- which.min(abs(fit_new$surv - 0.5))
-      med_time <- round(fit_new$time[idx], 1)
+      req(pred_result$fit_new)
+      idx <- which.min(abs(pred_result$fit_new$surv - 0.5))
+      med_time <- round(pred_result$fit_new$time[idx], 1)
       paste0("Predicted median survival time: ", med_time, " months")
     })
     output$prob_table <- renderTable({
+      req(pred_result$fit_new)
       times <- c(6, 12, 24, 36)
-      surv_summary <- summary(fit_new, times = times)
+      surv_summary <- summary(pred_result$fit_new, times = times)
       data.frame(
         Month = surv_summary$time,
         Survival_Prob = round(surv_summary$surv, 3)
