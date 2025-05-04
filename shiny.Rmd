@@ -67,7 +67,7 @@ train_df <- data.frame(
 )
 colnames(train_df)[3:ncol(train_df)] <- selected_genes
 coxph_model <- coxph(Surv(time, status) ~ ., data = train_df)
-# 训练集上风险评分与分组阈值
+# Risk score and grouping threshold on the training set
 train_lp <- predict(coxph_model, newdata = train_df, type = "lp")
 cutoff <- median(train_lp, na.rm = TRUE)
 
