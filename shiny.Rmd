@@ -103,22 +103,31 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       h4("Input the genetic table of the new patient"),
-      fileInput("gene_csv", "Upload CSV of genes (optional)", accept = c(".csv")),
+      fileInput("gene_csv", "Upload CSV of genes", accept = ".csv"),
       actionButton("predict", "Start Predict"),
       width = 3
     ),
     mainPanel(
       tabsetPanel(
         tabPanel("Predict Outcome",
-          verbatimTextOutput("risk_text"),
-          verbatimTextOutput("group_text"),
-          verbatimTextOutput("hr_text"),
-          verbatimTextOutput("median_text"),
-          tableOutput("prob_table"),
-          plotOutput("pred_plot")
+          # Model plots (shown before prediction)
+          conditionalPanel(
+            "output.show_model_plots == true",
+            plotOutput("lambda_plot"),
+            plotOutput("coef_plot")
+          ),
+          # Prediction outputs (shown after prediction)
+          conditionalPanel(
+            "output.show_model_plots == false",
+            verbatimTextOutput("risk_text"),
+            verbatimTextOutput("group_text"),
+            verbatimTextOutput("hr_text"),
+            verbatimTextOutput("median_text"),
+            tableOutput("prob_table"),
+            plotOutput("pred_plot")
+          )
         )
-      ),
-      width = 9
+      ), width = 9
     )
   )
 )
@@ -127,28 +136,43 @@ ui <- fluidPage(
 # Server Logic
 #--------------------------------------------------------
 server <- function(input, output, session) {
+  # For controlling UI
+  # changes to true when prediction is made. Renders model plots or prediction plots
+  pred_made <- reactiveVal(FALSE)  
+  output$show_model_plots <- reactive({ !pred_made() })
+  outputOptions(output, "show_model_plots", suspendWhenHidden = FALSE)
+  
+  # MODEL PLOTS
+  output$lambda_plot <- renderPlot({
+    plot(cvfit, main = "Cross-validation for Penalized Cox Model")
+  })
+  output$coef_plot <- renderPlot({
+    ggplot(gene_coefs, aes(x = reorder(gene, coef), y = coef, fill = coef > 0)) +
+      geom_col() +
+      coord_flip() +
+      scale_fill_manual(values = c("red", "blue"),
+                       labels = c("high-risk gene","protective gene")) +
+      labs(x = NULL, y = "coef", title = "Lasso-Cox gene id") +
+      theme_minimal()
+  })
 
   observeEvent(input$predict, {
-    # 1. Ensure a CSV has been uploaded before proceeding
     req(input$gene_csv)
+    pred_made(TRUE)
     
-    # 2. Read the CSV as raw data (no header, so everything is in order)
     df <- read.csv(input$gene_csv$datapath, header = FALSE, stringsAsFactors = FALSE)
   
-    # 3. The first row contains patientID header info — remove that row
-    #    (df[1,2] would be patientID if you want to keep/display it)
+    #The first row contains patientID header info — remove that row
     df <- df[-1, , drop = FALSE]
     
-    # 4. Extract gene names and values from the columns
     genes <- df[[1]]               # first column = gene names
     values <- as.numeric(df[[2]])  # second column = numeric values
     names(values) <- genes         # associate each value to its gene name
     
-    # 5. Reformat just the genes your model expects, in the correct order
     newdata <- as.data.frame(t(values[selected_genes]))
     colnames(newdata) <- selected_genes
   
-    # 6. Proceed to prediction exactly as before
+    # PREDICT USING CSV DF
     risk_score <- predict(coxph_model, newdata = newdata, type = "lp")
     risk_group <- ifelse(risk_score > cutoff, "High", "Low")
     hr <- exp(risk_score)
