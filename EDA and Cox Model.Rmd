@@ -17,9 +17,16 @@ output:
 ---
 This version includes the data processing and the complete Cox model.
 ```{r SETUP, warning=FALSE, message=FALSE}
+library(GEOquery)
+library(limma)
+library(ggplot2)
+library(pheatmap)
+library(RColorBrewer)
+library(reshape2)
+library(ggfortify)
+library(knitr)
+library(tidyverse)
 library(dplyr)
-library(GEOquery) 
-library(tidyr)
 library(survival)
 library(glmnet)
 library(survminer)
