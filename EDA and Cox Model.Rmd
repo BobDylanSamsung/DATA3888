@@ -18,12 +18,16 @@ output:
 This version includes the data processing and the complete Cox model.
 ```{r SETUP, warning=FALSE, message=FALSE}
 library(dplyr)
-library(GEOquery) 
 library(tidyr)
+library(GEOquery)
 library(survival)
 library(glmnet)
 library(survminer)
 library(caret)
+library(ggplot2)
+library(ggfortify)
+library(pheatmap)
+library(knitr)
 ```
 
 # Load Data and data processing
