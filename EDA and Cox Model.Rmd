@@ -16,7 +16,10 @@ output:
     code_folding: show
 ---
 This version includes the data processing and the complete Cox model.
+# GEO Data Analysis with Error Handling
+
 ```{r SETUP, warning=FALSE, message=FALSE}
+# Load required libraries
 library(dplyr)
 library(tidyr)
 library(GEOquery)
@@ -28,12 +31,13 @@ library(ggplot2)
 library(ggfortify)
 library(pheatmap)
 library(knitr)
+library(BiocManager)  # In case we need to install any missing packages
 ```
 
-# Load Data and data processing
+# Utility Functions
 
-```{r GET_DATA, warning=FALSE, message=FALSE}
-
+```{r UTILITY_FUNCTIONS, warning=FALSE, message=FALSE}
+# Function to extract gene symbol from gene assignment
 extract_gene_symbol <- function(gene_assignment) {
   # Split the string by //
   parts <- strsplit(gene_assignment, " // ")[[1]]
@@ -46,9 +50,8 @@ extract_gene_symbol <- function(gene_assignment) {
   }
 }
 
+# Function to extract data from GEO series
 extract_gse_data <- function(gse) {
-  # filteredFeatureData <- fData(gse) %>% filter(gene_assignment != "---")
-  # filteredFeatureData$gene_symbol <- sapply(filteredFeatureData$gene_assignment, extract_gene_symbol)
   return(list(
     featureData = fData(gse),
     phenoData = pData(gse),
@@ -56,10 +59,128 @@ extract_gse_data <- function(gse) {
   ))
 }
 
-GSE78229 <- getGEO("GSE78229")$GSE78229_series_matrix.txt.gz %>% extract_gse_data()
-GSE28735 <- getGEO("GSE28735")$GSE28735_series_matrix.txt.gz %>% extract_gse_data()
-GSE62452 <- getGEO("GSE62452")$GSE62452_series_matrix.txt.gz %>% extract_gse_data()
+# Robust function to download GEO data with error handling
+get_geo_data <- function(gse_id, destdir = tempdir(), retries = 3) {
+  message(paste("Attempting to download", gse_id))
+  
+  for (i in 1:retries) {
+    tryCatch({
+      # Try to download the data
+      gse_list <- getGEO(gse_id, destdir = destdir, GSEMatrix = TRUE, AnnotGPL = FALSE)
+      
+      # Extract the first element (series matrix)
+      gse <- gse_list[[1]]
+      
+      message(paste("Successfully downloaded", gse_id))
+      return(gse)
+      
+    }, error = function(e) {
+      message(paste("Attempt", i, "failed for", gse_id, ":", e$message))
+      
+      if (i < retries) {
+        message(paste("Retrying in 5 seconds..."))
+        Sys.sleep(5)
+      } else {
+        stop(paste("Failed to download", gse_id, "after", retries, "attempts"))
+      }
+    })
+  }
+}
+```
 
+# Load Data with Error Handling
+
+```{r LOAD_DATA, warning=FALSE, message=FALSE}
+# Create a download directory
+download_dir <- file.path(getwd(), "GEO_data")
+if (!dir.exists(download_dir)) {
+  dir.create(download_dir)
+}
+
+# Try different approaches to load the data
+tryCatch({
+  # Approach 1: Standard download with custom directory
+  GSE78229_gse <- get_geo_data("GSE78229", destdir = download_dir)
+  GSE78229 <- extract_gse_data(GSE78229_gse)
+  
+}, error = function(e) {
+  message(paste("Error with approach 1:", e$message))
+  
+  # Approach 2: Try with temporary directory
+  tryCatch({
+    GSE78229_gse <- get_geo_data("GSE78229", destdir = tempdir())
+    GSE78229 <- extract_gse_data(GSE78229_gse)
+    
+  }, error = function(e2) {
+    message(paste("Error with approach 2:", e2$message))
+    
+    # Approach 3: Try without GSEMatrix
+    tryCatch({
+      GSE78229_gse <- getGEO("GSE78229", GSEMatrix = FALSE)
+      # For GSEMatrix = FALSE, we need different extraction
+      stop("GSEMatrix = FALSE requires different processing. Please check your connection and try again.")
+      
+    }, error = function(e3) {
+      stop(paste("All approaches failed. Please check your internet connection and try again.\nLast error:", e3$message))
+    })
+  })
+})
+
+# Load other datasets
+tryCatch({
+  GSE28735_gse <- get_geo_data("GSE28735", destdir = download_dir)
+  GSE28735 <- extract_gse_data(GSE28735_gse)
+  
+  GSE62452_gse <- get_geo_data("GSE62452", destdir = download_dir)
+  GSE62452 <- extract_gse_data(GSE62452_gse)
+  
+}, error = function(e) {
+  message(paste("Error loading additional datasets:", e$message))
+})
+
+# Check what data we successfully loaded
+loaded_datasets <- c()
+if (exists("GSE78229")) loaded_datasets <- c(loaded_datasets, "GSE78229")
+if (exists("GSE28735")) loaded_datasets <- c(loaded_datasets, "GSE28735")
+if (exists("GSE62452")) loaded_datasets <- c(loaded_datasets, "GSE62452")
+
+message(paste("Successfully loaded datasets:", paste(loaded_datasets, collapse = ", ")))
+```
+
+
+
+# Check Network Settings
+
+```{r CHECK_NETWORK, warning=FALSE, message=FALSE}
+# Check current timeout settings
+current_timeout <- getOption("timeout")
+message(paste("Current timeout setting:", current_timeout, "seconds"))
+
+# Increase timeout if needed (useful for slow connections)
+options(timeout = 300)  # 5 minutes
+
+# Check proxy settings if you're behind a firewall
+# Sys.setenv(http_proxy = "http://your.proxy.server:port")
+# Sys.setenv(https_proxy = "https://your.proxy.server:port")
+```
+
+# Data Exploration (once loaded)
+
+```{r EXPLORE_DATA, warning=FALSE, message=FALSE}
+# This section will only run if data was successfully loaded
+if (exists("GSE78229")) {
+  message("GSE78229 data structure:")
+  message(paste("- Expression matrix dimensions:", paste(dim(GSE78229$eMat), collapse = " x ")))
+  message(paste("- Number of features:", nrow(GSE78229$featureData)))
+  message(paste("- Number of samples:", nrow(GSE78229$phenoData)))
+  
+  # Preview the data
+  message("\nFirst few gene IDs:")
+  print(head(rownames(GSE78229$eMat)))
+  
+  message("\nFirst few sample IDs:")
+  print(head(colnames(GSE78229$eMat)))
+}
 ```
 
 
