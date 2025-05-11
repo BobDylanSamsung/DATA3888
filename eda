@@ -1,36 +1,170 @@
-Exploratory Data Analysis (EDA) for Your Data
-{r}
-
-# Load required libraries
+---
+title: "EDA and Models"
+author: "Biomed8"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    fig_caption: yes
+    number_sections: yes
+    self_contained: yes
+    theme: flatly
+    css: 
+      - https://use.fontawesome.com/releases/v5.0.6/css/all.css
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    code_folding: show
+---
+This version includes the data processing and the complete Cox model.
+```{r SETUP, warning=FALSE, message=FALSE}
+library(dplyr)
+library(tidyr)
 library(GEOquery)
-library(limma)
+library(survival)
+library(glmnet)
+library(survminer)
+library(caret)
 library(ggplot2)
-library(pheatmap)
-library(RColorBrewer)
-library(reshape2)
 library(ggfortify)
+library(pheatmap)
 library(knitr)
-library(tidyverse)
-1. Load Data
+```
 
-# GSE dataset loading
-gse_data <- getGEO("GSEXXXXX", GSEMatrix = TRUE)[[1]] # Replace with the correct GSE ID
-exprs_data <- exprs(gse_data)
-pdata_data <- pData(gse_data)
-2. Inspect Datasets
-2.1 Overview + Histograms
+# Load Data and data processing
+
+```{r GET_DATA, warning=FALSE, message=FALSE}
+
+extract_gene_symbol <- function(gene_assignment) {
+  # Split the string by //
+  parts <- strsplit(gene_assignment, " // ")[[1]]
+  
+  # Return the second element (gene symbol)
+  if (length(parts) >= 2) {
+    return(trimws(parts[2]))
+  } else {
+    return(NA)
+  }
+}
+
+extract_gse_data <- function(gse) {
+  # filteredFeatureData <- fData(gse) %>% filter(gene_assignment != "---")
+  # filteredFeatureData$gene_symbol <- sapply(filteredFeatureData$gene_assignment, extract_gene_symbol)
+  return(list(
+    featureData = fData(gse),
+    phenoData = pData(gse),
+    eMat = exprs(gse)
+  ))
+}
+
+GSE78229 <- getGEO("GSE78229")$GSE78229_series_matrix.txt.gz %>% extract_gse_data()
+GSE28735 <- getGEO("GSE28735")$GSE28735_series_matrix.txt.gz %>% extract_gse_data()
+GSE62452 <- getGEO("GSE62452")$GSE62452_series_matrix.txt.gz %>% extract_gse_data()
+
+```
 
 
-# Overview of dimensions and summary
-dim(exprs_data)  # Rows: genes, Columns: samples
-summary(exprs_data)
-hist(exprs_data, breaks=100, main="GSE Expression", xlab="Expression Level")
-2.2 Summarized Table
+```{r COMBINE_EMAT}
+find_common_genes <- function(...) {
+  matrices <- list(...)
+  common_genes <- Reduce(intersect, lapply(matrices, rownames))
+  return(common_genes)
+}
 
-# Summarizing expression data
-summarised_data <- as.data.frame(t(apply(exprs_data, 2, summary)))
-summarised_data$SampleID <- rownames(summarised_data)
-summarised_data <- summarised_data %>%
+common_genes <- find_common_genes(GSE28735$eMat, GSE62452$eMat)
+
+# subset_eMat_GSE78229 <- GSE78229$eMat[common_genes, ]
+subset_eMat_GSE28735 <- GSE28735$eMat[common_genes, ]
+subset_eMat_GSE62452 <- GSE62452$eMat[common_genes, ]
+
+#combined_matrix <- cbind(subset_eMat_GSE78229, subset_eMat_GSE28735, subset_eMat_GSE62452)
+
+combined_matrix <- cbind(subset_eMat_GSE28735, subset_eMat_GSE62452)
+
+# print(dim(combined_matrix))
+```
+
+```{r FILTER_28735_PHENO}
+
+GSE28735$phenoData$is_dead <- as.numeric(
+  replace(
+    GSE28735$phenoData$`cancer_death:ch1`, 
+    GSE28735$phenoData$`cancer_death:ch1` == "na", NA
+    )
+  )
+
+non_tumor_rows <- grepl("non-tumor tissue", GSE28735$phenoData$`source_name_ch1`)
+
+filtered_tumor <- GSE28735$phenoData[!non_tumor_rows, ]
+
+filtered_28735 <- filtered_tumor[!is.na(filtered_tumor$is_dead), ] %>% rename(months_survived = `survival_month:ch1`)
+
+# nrow(filtered_28735)
+```
+
+```{r FILTER_62452_PHENO}
+GSE62452$phenoData$is_dead <- as.numeric(
+  replace(
+    GSE62452$phenoData$`survival status:ch1`,
+    GSE62452$phenoData$`survival status:ch1` %in% c("na", "?"), NA
+    )
+  )
+
+tumor_rows <- grepl("Pancreatic tumor", GSE62452$phenoData$`tissue:ch1`)
+
+filtered_tumor <- GSE62452$phenoData[tumor_rows, ]
+
+filtered_62452 <- filtered_tumor[!is.na(filtered_tumor$is_dead), ] %>%
+  rename(months_survived = `survival months:ch1`)
+
+# nrow(filtered_62452)
+```
+
+```{r COMBINE_PHENO_DATA}
+
+combined_pheno <- bind_rows(filtered_28735, filtered_62452)
+filtered_matrix <- combined_matrix[, colnames(combined_matrix) %in% rownames(combined_pheno)]
+
+# dim(filtered_matrix)
+
+gse <- list(
+  featureData = GSE28735$featureData,
+  phenoData = combined_pheno,
+  eMat = filtered_matrix
+)
+```
+
+# Exploratory Data Analysis (EDA)
+## Distribution of Expression Values in Combined Dataset
+### 2.1 Overview + Histogram
+
+```{r CREATE_EDA_SET}
+
+# Combine pheno data
+eda_pheno <- bind_rows(GSE28735$phenoData, GSE62452$phenoData)
+eda_matrix <- combined_matrix[, colnames(combined_matrix) %in% rownames(eda_pheno)]
+stopifnot(all(colnames(eda_matrix) == rownames(eda_pheno)))
+
+gse_eda <- list(
+  featureData = GSE28735$featureData,
+  phenoData = eda_pheno,
+  eMat = eda_matrix
+)
+```
+
+### Distribution of Expression Values (Tumor + Non-Tumor)
+
+```{r}
+dim(gse_eda$eMat)
+summary_values_eda <- summary(as.vector(gse_eda$eMat))
+hist(gse_eda$eMat, breaks = 100, main = "All Samples Expression Histogram", xlab = "Expression", col = "lightblue")
+```
+
+### Summary Table (Per Sample)
+
+```{r}
+summary_per_sample_eda <- as.data.frame(t(apply(gse_eda$eMat, 2, summary)))
+summary_per_sample_eda$SampleID <- rownames(summary_per_sample_eda)
+summary_per_sample_eda <- summary_per_sample_eda %>%
   relocate(SampleID) %>%
   rename(
     Min = "Min.",
@@ -40,77 +174,594 @@ summarised_data <- summarised_data %>%
     Q3 = "3rd Qu.",
     Max = "Max."
   )
-View summarized data
-head(summarised_data)
 
-Display summarized data in table format
-kable(summarised_data, caption = "Summary Statistics for GSE Samples")
+kable(head(summary_per_sample_eda), caption = "Summary Statistics (All Samples)")
+```
 
-2.3 Box Plot Overview
+### Boxplots
 
-# Create long format for the box plot
-summarised_long_data <- summarised_data %>%
+```{r}
+summary_long_eda <- summary_per_sample_eda %>%
   pivot_longer(cols = -SampleID, names_to = "Statistic", values_to = "Value")
 
-# Plot box plots for summary statistics
-ggplot(summarised_long_data, aes(x = Statistic, y = Value)) +
-  geom_boxplot() +
+ggplot(summary_long_eda, aes(x = Statistic, y = Value)) +
+  geom_boxplot(fill = "skyblue") +
   facet_wrap(~ Statistic, scales = "free") +
-  ggtitle("Distribution of Summary Stats Across Samples") +
+  ggtitle("Summary Statistics Boxplot (All Samples)") +
   theme_minimal()
-2.4 Box Plot per Sample
-{r}
 
-# Box plot per sample for the expression data
-boxplot(exprs_data, outline=FALSE, las=2, main="GSE Expression per Sample")
-3. PCA Plot
-3.1 Clean Data Labels
-{r}
+boxplot(gse_eda$eMat, outline = FALSE, las = 2, main = "Expression per Sample (All)", col = "gray90")
+```
 
-# Add tissue labels (normal vs tumor or relevant categories based on your dataset)
-pdata_data$Tissue <- ifelse(grepl("non-tumor", pdata_data$source_name_ch1, ignore.case = TRUE),
-                            "Normal", "Tumor")
-pdata_data$Tissue <- factor(pdata_data$Tissue)
-table(pdata_data$Tissue)  # Check label assignment
-3.2 Plot PCA
-{r}
 
-# Perform PCA and plot results
-expr_data_transposed <- t(exprs_data)
-autoplot(prcomp(expr_data_transposed, scale. = TRUE),
-         data = pdata_data,
-         colour = 'Tissue') +
-  ggtitle("PCA of GSE Samples") +
+
+
+
+## PCA Plot (Tumor + Non-Tumor)
+
+```{r}
+gse_eda$phenoData$Tissue <- ifelse(grepl("non-tumor|normal", gse_eda$phenoData$`source_name_ch1`, ignore.case = TRUE),
+                                   "Normal", "Tumor")
+gse_eda$phenoData$Tissue <- factor(gse_eda$phenoData$Tissue)
+
+pca_all <- prcomp(t(gse_eda$eMat), scale. = TRUE)
+
+autoplot(pca_all, data = gse_eda$phenoData, colour = "Tissue") +
+  ggtitle("PCA: Tumor vs Normal Samples") +
   theme_minimal()
-4. Heatmap
-{r}
+```
 
-# Generate heatmap for top variable genes
-expr_matrix <- exprs_data
-gene_variance <- apply(expr_matrix, 1, var)
-top_genes <- names(sort(gene_variance, decreasing = TRUE)[1:100])
 
-# Tissue labels for annotation
-pdata_data$Tissue <- factor(pdata_data$Tissue)
-annotation_col_data <- data.frame(Tissue = pdata_data$Tissue)
-rownames(annotation_col_data) <- rownames(pdata_data)
 
-# Generate the heatmap
-pheatmap(expr_matrix[top_genes, ],
+## More EDA -> get up to PC4
+
+```{r}
+
+# Extend PCA analysis to PC4
+pca_all <- prcomp(t(gse_eda$eMat), scale. = TRUE)
+
+# Calculate variance explained by each PC
+variance_explained <- pca_all$sdev^2 / sum(pca_all$sdev^2)
+cumulative_variance <- cumsum(variance_explained)
+
+
+variance_df <- data.frame(
+  PC = paste0("PC", 1:length(variance_explained)),
+  Variance = variance_explained,
+  Cumulative = cumulative_variance
+) %>% head(10)
+
+ggplot(variance_df, aes(x=PC, y=Variance)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_line(aes(y=Cumulative, group=1), color="red") +
+  geom_point(aes(y=Cumulative), color="red") +
+  scale_y_continuous(sec.axis = sec_axis(~., name="Cumulative Variance")) +
+  labs(title="Variance Explained by Top 10 Principal Components") +
+  theme_minimal()
+
+# Scatter plots of PC combinations
+p1 <- autoplot(pca_all, data=gse_eda$phenoData, colour="Tissue", 
+              x=1, y=2, frame=TRUE, frame.type='norm') +
+  ggtitle("PC1 vs PC2")
+
+p2 <- autoplot(pca_all, data=gse_eda$phenoData, colour="Tissue", 
+              x=3, y=4, frame=TRUE, frame.type='norm') +
+  ggtitle("PC3 vs PC4")
+
+p3 <- autoplot(pca_all, data=gse_eda$phenoData, colour="Tissue", 
+              x=1, y=3, frame=TRUE, frame.type='norm') +
+  ggtitle("PC1 vs PC3")
+
+p4 <- autoplot(pca_all, data=gse_eda$phenoData, colour="Tissue", 
+              x=2, y=4, frame=TRUE, frame.type='norm') +
+  ggtitle("PC2 vs PC4")
+
+# Combine plots using gridExtra
+library(gridExtra)
+grid.arrange(p1, p2, p3, p4, ncol=2)
+
+# Analyze PC scores with tissue type
+pc_scores <- as.data.frame(pca_all$x[,1:4])
+pc_scores$Tissue <- gse_eda$phenoData$Tissue
+
+# Check for survival-related columns
+survival_cols <- grep("surviv|month|time|death|event", names(gse_eda$phenoData), value=TRUE, ignore.case=TRUE)
+if(length(survival_cols) == 0) {
+  message("No survival data found in gse_eda, skipping survival analysis")
+} else {
+  surv_col <- survival_cols[1]
+  pc_scores$Survival_Info <- gse_eda$phenoData[[surv_col]]
+  
+  status_cols <- grep("status|death|event|outcome", names(gse_eda$phenoData), value=TRUE, ignore.case=TRUE)
+  if(length(status_cols) > 0) {
+    pc_scores$Status <- gse_eda$phenoData[[status_cols[1]]]
+  }
+  
+  if(is.numeric(pc_scores$Survival_Info)) {
+    cor_results <- sapply(1:4, function(i) {
+      cor.test(pc_scores[,i], pc_scores$Survival_Info)$estimate
+    })
+    print(paste("Correlation between PC1-4 and survival time:", paste(round(cor_results, 3), collapse=", ")))
+  }
+}
+
+
+# Visualize PC score distribution across tissues
+boxplot_data <- reshape2::melt(pc_scores[,c(1:4, which(names(pc_scores)=="Tissue"))],
+                              id.vars="Tissue")
+
+ggplot(boxplot_data, aes(x=Tissue, y=value, fill=Tissue)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales="free_y") +
+  labs(title="Distribution of PC Scores Across Tissue Types", y="PC Score") +
+  theme_minimal()
+
+
+```
+
+
+## Heatmap (Top 100 Variable Genes)
+
+```{r}
+var_genes_eda <- apply(gse_eda$eMat, 1, var)
+top100_genes_eda <- names(sort(var_genes_eda, decreasing = TRUE)[1:100])
+
+annotation_col_eda <- data.frame(Tissue = gse_eda$phenoData$Tissue)
+rownames(annotation_col_eda) <- rownames(gse_eda$phenoData)
+
+pheatmap(gse_eda$eMat[top100_genes_eda, ],
          scale = "row",
          show_rownames = FALSE,
          show_colnames = FALSE,
-         annotation_col = annotation_col_data,
-         main = "Top 100 Variable Genes Heatmap (Annotated)")
-5. Differential Expression Analysis (Optional)
-{r}
-# Placeholder for differential expression analysis code
-# Example using limma package for comparison of normal vs tumor samples
-design <- model.matrix(~ 0 + pdata_data$Tissue)
-colnames(design) <- c("Normal", "Tumor")
-fit <- lmFit(expr_matrix, design)
-fit <- eBayes(fit)
+         annotation_col = annotation_col_eda,
+         main = "Top 100 Variable Genes - All Samples")
+```
 
-# View top differential genes
-top_table <- topTable(fit, coef="Tumor", adjust="fdr", number=10)
-print(top_table)
+# Cox Model
+
+## Choose λ 
+
+```{r}
+# Construct survival object: assume that 'months_survived' in gse$phenoData is the survival time (numeric) and 'is_dead' is the event status (1 = death, 0 = survival)
+surv_obj <- with(gse$phenoData, Surv(as.numeric(months_survived), as.numeric(is_dead)))
+
+## Penalized Cox Model
+# Build the prediction model using all 28869 genes 
+# Prepare the prediction matrix x: the columns in gse$eMat represent samples; after transposition, rows represent samples and columns represent features
+x <- t(gse$eMat)
+x <- as.matrix(x)
+
+# Fit the Cox model with Lasso penalty using cross-validation
+set.seed(3888)
+cvfit <- cv.glmnet(x, surv_obj, family = "cox", alpha = 1)
+plot(cvfit, main = "Cross-validation for Penalized Cox Model")
+best_lambda <- cvfit$lambda.min
+```
+
+
+Horizontal axis: Log(λ). When λ gets larger (to the left), the penalty becomes stronger and the model becomes more sparse. When λ gets smaller (to the right), the penalty becomes weaker and more genes are kept.
+
+Vertical axis: Partial Likelihood Deviance. A smaller value means the model fits better.
+
+Each red dot shows the average deviance for a λ value. The gray lines show the range of error across different folds.
+
+The left dashed line shows λ.min, where the error is the smallest and the model fits the best.
+
+The right dashed line shows λ.1se, which gives a slightly stronger penalty. It makes the model simpler and uses fewer genes.
+
+We chose the λ.min on the left dashed line, which is 0.2227.
+
+```{r}
+cat("Best lambda:", best_lambda, "\n")
+```
+
+Through model calculation, the optimal λ value is 0.256105. This is the best choice for the Lasso penalty strength. Under this penalty, the model automatically shrinks the coefficients of many genes to zero, keeping only a small number of genes that are significantly related to survival.
+
+## Build Cox model and visualization
+```{r}
+# Fit the final model using the optimal lambda
+final_model <- glmnet(x, surv_obj, family = "cox", alpha = 1, lambda = best_lambda)
+coef_final <- coef(final_model)
+
+cat("Non-zero coefficients in the final model:\n")
+nz_idx <- which(coef_final != 0)
+df <- data.frame(gene_id = colnames(x)[nz_idx],
+  coef    = as.numeric(coef_final[nz_idx]))
+print(df)
+```
+
+After training the model, a total of 22 genes were selected.
+
+The absolute value of each gene's coefficient reflects its contribution to the risk score: the larger the absolute value, the higher the weight of the gene in the model and the more important it is for distinguishing prognosis.
+
+This can be seen more clearly in the figure.
+```{r}
+library(ggplot2)
+ggplot(df, aes(x = reorder(gene_id, coef), y = coef, fill = coef > 0)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_manual(values = c("red","blue"), labels = c("high-risk gene","protective gene")) +
+  labs(x = NULL, y = "coef", title = "Lasso-Cox gene id") +
+  theme_minimal()
+
+```
+
+
+A positive coefficient means that higher expression of the gene is associated with a higher risk of death, indicating a high-risk gene. This suggests that the gene may be promoting disease progression.
+
+A negative coefficient means that higher expression of the gene is associated with a lower risk of death, indicating a protective gene. These genes may help slow down disease progression.
+
+## Result visualization
+
+```{r}
+# Compute the risk scores for each sample (linear predictor)
+risk_scores <- predict(final_model, newx = x, type = "link")
+# Divide the samples into high-risk and low-risk groups by using the median risk score as the cutoff
+risk_group <- ifelse(risk_scores > median(risk_scores), "High", "Low")
+
+# Add the risk group information to the original phenotype data
+gse$phenoData$risk_group <- factor(risk_group, levels = c("Low", "High"))
+
+# Use the Kaplan-Meier method to compare the survival curves of the two risk groups
+fit_km <- survfit(surv_obj ~ risk_group, data = gse$phenoData)
+ggsurvplot(fit_km, data = gse$phenoData, pval = TRUE, risk.table = TRUE, 
+           title = "Kaplan-Meier Survival Curves by Risk Group")
+```
+
+
+Risk grouping: Patients were divided into "low-risk group" (red) and "high-risk group" (cyan) based on the median risk score of all samples.
+
+Kaplan–Meier curve: The horizontal axis shows follow-up time (months), and the vertical axis shows survival probability.
+
+The red curve stays above the cyan curve at all times, indicating that patients in the low-risk group have a much higher survival rate compared to those in the high-risk group.
+
+Log-rank test p-value: p < 0.0001, showing that the difference between the two survival curves is statistically highly significant. This means that the risk score based on the 29 selected genes can clearly distinguish between good and poor prognosis.
+
+Risk table (Number at risk): Shown below the curves, it displays the number of patients still under follow-up at each time point, helping to evaluate the reliability of survival estimates in later stages.
+
+
+
+```{r}
+
+# Dataset splitting, Cox model training, and confusion matrix generation
+library(caret)
+library(survival)
+library(glmnet)
+library(survminer)
+library(pROC)
+library(pheatmap)
+
+set.seed(8888)
+sample_indices <- createDataPartition(gse$phenoData$is_dead, p = 0.7, 
+                                      list = FALSE, times = 1)
+
+# Split expression matrix and phenotype data
+train_expr <- gse$eMat[, sample_indices]
+test_expr <- gse$eMat[, -sample_indices]
+train_pheno <- gse$phenoData[sample_indices, ]
+test_pheno <- gse$phenoData[-sample_indices, ]
+
+# Create survival objects for training/testing sets
+train_surv <- with(train_pheno, Surv(as.numeric(months_survived), as.numeric(is_dead)))
+test_surv <- with(test_pheno, Surv(as.numeric(months_survived), as.numeric(is_dead)))
+
+
+x_train <- t(train_expr)
+x_test <- t(test_expr)
+
+set.seed(8888)
+cv_fit <- cv.glmnet(x_train, train_surv, family = "cox", alpha = 1, nfolds = 10)
+best_lambda <- cv_fit$lambda.min
+cat("Optimal lambda value:", best_lambda, "\n")
+
+# Train final model with best lambda
+final_model <- glmnet(x_train, train_surv, family = "cox", alpha = 1, lambda = best_lambda)
+
+```
+
+```{r}
+# Extract non-zero coefficient genes
+coef_final <- coef(final_model)
+nz_idx <- which(coef_final != 0)
+selected_genes <- rownames(coef_final)[nz_idx]
+df_coef <- data.frame(
+  gene = rownames(coef_final)[nz_idx],
+  coefficient = as.numeric(coef_final[nz_idx])
+)
+df_coef <- df_coef[order(df_coef$coefficient, decreasing = TRUE), ]
+cat("Number of genes selected by model:", length(selected_genes), "\n")
+print(head(df_coef, 10))  # Show top 10 genes with coefficients
+
+#  Calculate risk scores for training/testing sets
+train_risk_scores <- predict(final_model, newx = x_train, type = "link")
+test_risk_scores <- predict(final_model, newx = x_test, type = "link")
+
+# Evaluate model performance with C-index on test set
+library(Hmisc)
+c_index <- rcorr.cens(-test_risk_scores, test_surv)[1]
+cat("Test set C-index:", c_index, "\n")
+
+
+```
+
+```{r}
+# Determine risk group threshold using training set quartiles
+q1 <- quantile(train_risk_scores, 0.25)
+median_score <- quantile(train_risk_scores, 0.5)
+q3 <- quantile(train_risk_scores, 0.75)
+cat("Risk score 1st quartile:", q1, "\n")
+cat("Risk score median:", median_score, "\n")
+cat("Risk score 3rd quartile:", q3, "\n")
+
+# Use median as cutpoint
+best_cutpoint <- median_score
+train_pheno$predicted_risk <- ifelse(train_risk_scores > best_cutpoint, "High", "Low")
+test_pheno$predicted_risk <- ifelse(test_risk_scores > best_cutpoint, "High", "Low")
+train_pheno$predicted_risk <- factor(train_pheno$predicted_risk, levels = c("Low", "High"))
+test_pheno$predicted_risk <- factor(test_pheno$predicted_risk, levels = c("Low", "High"))
+```
+
+```{r}
+
+#  Plot Kaplan-Meier survival curves for test set
+
+fit_km_test <- survfit(test_surv ~ test_pheno$predicted_risk)
+surv_plot <- ggsurvplot(
+  fit_km_test, 
+  data = test_pheno, 
+  pval = TRUE, 
+  risk.table = TRUE, 
+  conf.int = TRUE,
+  palette = c("blue", "red"),
+  title = "Test Set Survival Curves by Risk Group"
+)
+
+print(surv_plot)
+```
+
+
+```{r}
+# Create confusion matrices for different time points
+time_points <- c(3, 6, 12, 24)
+
+for(time_point in time_points) {
+  cat("\n====", time_point, "Months Survival Prediction Evaluation ====\n")
+  
+
+  test_pheno$actual_status <- with(test_pheno, 
+                                  ifelse(as.numeric(is_dead) == 1 & 
+                                          as.numeric(months_survived) <= time_point, 
+                                        "High", "Low"))
+  
+  evaluable_samples <- which(as.numeric(test_pheno$months_survived) >= time_point | 
+                               test_pheno$is_dead == 1)
+  
+  if(length(evaluable_samples) < 10) {
+    cat("Warning: Too few samples for evaluation at", time_point, "months\n")
+    next
+  }
+  
+  eval_pheno <- test_pheno[evaluable_samples, ]
+  
+  conf_matrix <- table(Predicted = eval_pheno$predicted_risk, 
+                       Actual = eval_pheno$actual_status)
+  print("Confusion Matrix:")
+  print(conf_matrix)
+  
+  # Calculate performance metrics 
+  if(nrow(conf_matrix) == 2 && ncol(conf_matrix) == 2) {
+    accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+    sensitivity <- conf_matrix[2,2] / sum(conf_matrix[,2])
+    specificity <- conf_matrix[1,1] / sum(conf_matrix[,1])
+    precision <- conf_matrix[2,2] / sum(conf_matrix[2,])
+    
+    cat("Accuracy:", round(accuracy * 100, 2), "%\n")
+    cat("Sensitivity:", round(sensitivity * 100, 2), "%\n")
+    cat("Specificity:", round(specificity * 100, 2), "%\n")
+    cat("Precision:", round(precision * 100, 2), "%\n")
+    
+    # Calculate ROC curve and AUC for the specific time point
+    roc_obj <- roc(eval_pheno$actual_status, 
+                   as.numeric(predict(final_model, 
+                                      newx = x_test[evaluable_samples,], 
+                                      type = "link")))
+    auc_value <- auc(roc_obj)
+    cat("AUC:", round(auc_value, 3), "\n")
+    
+    # Plot confusion matrix heatmap
+    title <- paste("Confusion Matrix at", time_point, "Months")
+    pheatmap(conf_matrix, 
+             display_numbers = TRUE, 
+             color = colorRampPalette(c("white", "steelblue"))(100),
+             main = title, 
+             cluster_rows = FALSE, 
+             cluster_cols = FALSE)
+    
+    plot(roc_obj, main = paste("ROC Curve at", time_point, "Months (AUC =", round(auc_value, 3), ")"))
+  } else {
+    cat("Warning: Incomplete confusion matrix dimensions, skipping metrics\n")
+  }
+}
+
+```
+
+
+```{r}
+# Create confusion matrices for different time points
+library(timeROC)
+
+
+time_roc <- timeROC(
+  T = as.numeric(test_pheno$months_survived),
+  delta = as.numeric(test_pheno$is_dead),
+  marker = test_risk_scores,
+  cause = 1,
+  times = c(3, 12, 24, 36),
+  ROC = TRUE
+)
+
+# Plot time-dependent ROC curves
+plot(time_roc, time = 3, title = "Time-dependent ROC at 12 months")
+plot(time_roc, time = 12, add = TRUE, col = "green")
+plot(time_roc, time = 24, add = TRUE, col = "red")
+plot(time_roc, time = 36, add = TRUE, col = "blue")
+legend("bottomright", 
+       legend = c("3 months","12 months", "24 months", "36 months"),
+       col = c("black","green", "red", "blue"),
+       lty = 1)
+
+
+cat("\nTime-dependent AUC values:\n")
+cat("3 months AUC:", round(time_roc$AUC[1], 3), "\n")
+cat("12 months AUC:", round(time_roc$AUC[2], 3), "\n")
+cat("24 months AUC:", round(time_roc$AUC[3], 3), "\n")
+cat("36 months AUC:", round(time_roc$AUC[4], 3), "\n")
+
+```
+
+## RF 
+
+```{r MDRF_FEATURE_SELECTION}
+library(randomForestSRC)
+
+gse$phenoData$months_survived <- as.factor(gse$phenoData$months_survived)
+
+  
+# Expression matrix: genes as columns, samples as rows
+expr_df <- as.data.frame(t(gse$eMat))
+expr_df$sample_id <- rownames(expr_df)
+
+# Phenotype data
+pheno <- gse$phenoData
+pheno$sample_id <- rownames(pheno)
+
+# Merge to create the full dataset
+merged_data <- merge(expr_df, pheno[, c("sample_id", "months_survived", "is_dead")], by = "sample_id")
+merged_data$sample_id <- NULL
+
+# Run survival forest model
+set.seed(42)
+rf_model <- rfsrc(Surv(months_survived, is_dead) ~ ., data = merged_data, ntree = 500, forest = TRUE)
+
+# Compute minimum depth of each variable
+md_info <- max.subtree(rf_model)$order[, 1]  # gives a named vector: variable -> depth
+
+# Sort and select top genes (e.g., top 50)
+top_genes <- names(sort(md_info))[1:50]
+
+```
+
+
+```{r VISUALISE_FS}
+
+# Sort and make a dataframe
+md_df <- data.frame(
+  gene = names(md_info),
+  depth = as.numeric(md_info)
+)
+top_md_df <- md_df[order(md_df$depth), ][1:30, ]
+
+# Barplot
+library(ggplot2)
+
+ggplot(top_md_df, aes(x = reorder(gene, -depth), y = depth)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top Genes by Minimum Depth",
+       x = "Gene", y = "Minimum Depth")
+
+
+```
+```{r}
+library("survival")
+library("survminer")
+# Transpose expression matrix: samples as rows
+expr_data <- as.data.frame(t(gse$eMat[top_genes, ]))
+
+dim(expr_data)
+
+# Add survival info
+expr_data$time <- as.numeric(gse$phenoData$months_survived)
+expr_data$status <- as.numeric(gse$phenoData$is_dead)
+
+# Sanitize column names (recommended)
+colnames(expr_data) <- make.names(colnames(expr_data))
+
+# Also sanitize your gene list accordingly
+top_genes_clean <- make.names(top_genes)
+
+# Build formula again with cleaned names
+cox_formula <- as.formula(paste("Surv(time, status) ~", paste(top_genes_clean, collapse = " + ")))
+
+# Fit the model
+cox_model <- coxph(cox_formula, data = expr_data)
+
+# Summary of results
+summary(cox_model)
+
+ggforest(cox_model, data = expr_data, 
+         main = "Hazard Ratios for Top Genes",
+         cpositions = c(0.02, 0.22, 0.4))
+
+```
+```{r}
+library(devtools)
+install_github("binderh/CoxBoost")
+library(CoxBoost)
+
+time <- expr_data$time
+status <- expr_data$status
+gene_data <- expr_data[, -c(which(names(expr_data) %in% c("time", "status")))]
+
+set.seed(3888) 
+coxboost_model <- CoxBoost(time = time, status = status, x = as.matrix(gene_data), stepno = 100)
+
+summary(coxboost_model)
+
+plot(coxboost_model)
+
+coefficients <- coef(coxboost_model)
+print(coefficients)
+```
+```{r}
+# Load necessary libraries
+library(CoxBoost)
+library(survival)
+library(survminer)
+
+# Assuming expr_data is your dataset with survival information and gene expression data
+# expr_data$time: survival time
+# expr_data$status: event status (1 if event occurred, 0 otherwise)
+# expr_data: gene expression data
+
+# Prepare the data
+time <- expr_data$time
+status <- expr_data$status
+gene_data <- expr_data[, -c(which(names(expr_data) %in% c("time", "status")))]
+
+# Fit the CoxBoost model
+set.seed(123) # For reproducibility
+coxboost_model <- CoxBoost(time = time, status = status, x = as.matrix(gene_data), stepno = 100)
+
+# Create a survival object
+surv_obj <- Surv(time, status)
+
+# Fit a baseline survival curve
+base_coxph <- coxph(surv_obj ~ 1)  # Fit a null model
+base_surv <- survfit(base_coxph)
+
+# Predict the linear predictor
+lp <- predict(coxboost_model, newdata = as.matrix(gene_data), type = "lp")
+
+# Calculate survival probabilities for each individual
+surv_probs <- sapply(1:nrow(gene_data), function(i) {
+  base_surv$surv ^ exp(lp[i])
+})
+
+# Plot the average survival curve
+avg_surv_probs <- rowMeans(surv_probs)
+
+plot(base_surv$time, avg_surv_probs, type = "l", col = "blue",
+     xlab = "Time", ylab = "Probability of Survival",
+     main = "Average Survival Probability Over Time")
+```
