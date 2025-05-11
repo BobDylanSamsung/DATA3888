@@ -171,11 +171,38 @@ cat("Best lambda:", best_lambda, "\n")
 Through model calculation, the optimal λ value is 0.256105. This is the best choice for the Lasso penalty strength. Under this penalty, the model automatically shrinks the coefficients of many genes to zero, keeping only a small number of genes that are significantly related to survival.
 
 ## Build Cox model and visualization
-```{r}
-# Fit the final model using the optimal lambda
-final_model <- glmnet(x, surv_obj, family = "cox", alpha = 1, lambda = best_lambda)
-coef_final <- coef(final_model)
 
+```{r}
+# Data Division (80/20)
+set.seed(123) 
+n          <- nrow(x)
+train_idx  <- sample(seq_len(n), size = floor(0.8 * n))
+test_idx   <- setdiff(seq_len(n), train_idx)
+x_train    <- x[train_idx, , drop = FALSE]
+x_test     <- x[test_idx , , drop = FALSE]
+surv_train <- surv_obj[train_idx]
+surv_test  <- surv_obj[test_idx ]
+
+# training model
+library(glmnet)
+cox_model <- glmnet(x = x_train, y = surv_train, family  = "cox", alpha   = 1, lambda  = best_lambda)
+coef_final <- coef(cox_model)
+
+# Calculate the risk score
+risk_train <- as.numeric(predict(cox_model, newx = x_train, type = "link"))
+risk_test  <- as.numeric(predict(cox_model, newx = x_test , type = "link"))
+
+# evaluation
+library(survival)
+c_train <- concordance(surv_train ~ risk_train, reverse = TRUE)$concordance
+c_test  <- concordance(surv_test  ~ risk_test ,  reverse = TRUE)$concordance
+cat(sprintf("C‑index (train): %.3f\n", c_train))
+cat(sprintf("C‑index (test) : %.3f\n", c_test ))
+```
+On the test set, for any pair of patients, the model has approximately 78.9% probability of correctly determining which patient experienced the event (such as death) earlier.
+
+
+```{r}
 cat("Non-zero coefficients in the final model:\n")
 nz_idx <- which(coef_final != 0)
 df <- data.frame(gene_id = colnames(x)[nz_idx],
@@ -183,7 +210,7 @@ df <- data.frame(gene_id = colnames(x)[nz_idx],
 print(df)
 ```
 
-After training the model, a total of 22 genes were selected.
+After training the model, a total of 19 genes were selected.
 
 The absolute value of each gene's coefficient reflects its contribution to the risk score: the larger the absolute value, the higher the weight of the gene in the model and the more important it is for distinguishing prognosis.
 
@@ -231,3 +258,4 @@ The red curve stays above the cyan curve at all times, indicating that patients 
 Log-rank test p-value: p < 0.0001, showing that the difference between the two survival curves is statistically highly significant. This means that the risk score based on the 29 selected genes can clearly distinguish between good and poor prognosis.
 
 Risk table (Number at risk): Shown below the curves, it displays the number of patients still under follow-up at each time point, helping to evaluate the reliability of survival estimates in later stages.
+
