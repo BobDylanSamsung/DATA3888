@@ -640,68 +640,73 @@ surv_plot <- ggsurvplot(
 print(surv_plot)
 ```
 
-
 ```{r}
-# Create confusion matrices for different time points
+library(pROC)
+library(pheatmap)
+library(caret)
+
 time_points <- c(3, 6, 12, 24)
 
-for(time_point in time_points) {
-  cat("\n====", time_point, "Months Survival Prediction Evaluation ====\n")
+for (tp in time_points) {
+  cat("\n====", tp, "Months Survival Prediction Evaluation ====\n")
   
-
-  test_pheno$actual_status <- with(test_pheno, 
-                                  ifelse(as.numeric(is_dead) == 1 & 
-                                          as.numeric(months_survived) <= time_point, 
-                                        "High", "Low"))
+  # 1. Construct the actual label and explicitly set it to factor to ensure there are two levels
+  test_pheno$actual_status <- ifelse(
+    test_pheno$is_dead == 1 & test_pheno$months_survived <= tp, 
+    "High", 
+    "Low"
+  )
+  test_pheno$actual_status <- factor(
+    test_pheno$actual_status, 
+    levels = c("Low", "High")
+  )
   
-  evaluable_samples <- which(as.numeric(test_pheno$months_survived) >= time_point | 
-                               test_pheno$is_dead == 1)
-  
-  if(length(evaluable_samples) < 10) {
-    cat("Warning: Too few samples for evaluation at", time_point, "months\n")
+  # 2. Screen out evaluable samples
+  evaluable <- which(
+    test_pheno$is_dead == 1 | test_pheno$months_survived >= tp
+  )
+  if (length(evaluable) < 10) {
+    warning("Too few samples for evaluation at ", tp, " months")
     next
   }
+  eval_pheno <- test_pheno[evaluable, ]
   
-  eval_pheno <- test_pheno[evaluable_samples, ]
+  # 3. For the prediction label, the same factor levels should also be locked
+  eval_pheno$predicted_risk <- factor(
+    eval_pheno$predicted_risk, 
+    levels = c("Low", "High")
+  )
   
-  conf_matrix <- table(Predicted = eval_pheno$predicted_risk, 
-                       Actual = eval_pheno$actual_status)
-  print("Confusion Matrix:")
-  print(conf_matrix)
+  # 4. Generate a 2×2 confusion matrix
+  cm <- table(
+    Predicted = eval_pheno$predicted_risk, 
+    Actual    = eval_pheno$actual_status
+  )
+  print(cm)
   
-  # Calculate performance metrics 
-  if(nrow(conf_matrix) == 2 && ncol(conf_matrix) == 2) {
-    accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
-    sensitivity <- conf_matrix[2,2] / sum(conf_matrix[,2])
-    specificity <- conf_matrix[1,1] / sum(conf_matrix[,1])
-    precision <- conf_matrix[2,2] / sum(conf_matrix[2,])
-    
-    cat("Accuracy:", round(accuracy * 100, 2), "%\n")
-    cat("Sensitivity:", round(sensitivity * 100, 2), "%\n")
-    cat("Specificity:", round(specificity * 100, 2), "%\n")
-    cat("Precision:", round(precision * 100, 2), "%\n")
-    
-    # Calculate ROC curve and AUC for the specific time point
-    roc_obj <- roc(eval_pheno$actual_status, 
-                   as.numeric(predict(final_model, 
-                                      newx = x_test[evaluable_samples,], 
-                                      type = "link")))
-    auc_value <- auc(roc_obj)
-    cat("AUC:", round(auc_value, 3), "\n")
-    
-    # Plot confusion matrix heatmap
-    title <- paste("Confusion Matrix at", time_point, "Months")
-    pheatmap(conf_matrix, 
-             display_numbers = TRUE, 
-             color = colorRampPalette(c("white", "steelblue"))(100),
-             main = title, 
-             cluster_rows = FALSE, 
-             cluster_cols = FALSE)
-    
-    plot(roc_obj, main = paste("ROC Curve at", time_point, "Months (AUC =", round(auc_value, 3), ")"))
-  } else {
-    cat("Warning: Incomplete confusion matrix dimensions, skipping metrics\n")
-  }
+  # 5. Calculate a series of indicators directly using caret
+  cm_caret <- confusionMatrix(
+    cm, 
+    positive = "High"
+  )
+  cat("Accuracy:   ", round(cm_caret$overall["Accuracy"] * 100, 2), "%\n")
+  cat("Sensitivity:", round(cm_caret$byClass["Sensitivity"] * 100, 2), "%\n")
+  cat("Specificity:", round(cm_caret$byClass["Specificity"] * 100, 2), "%\n")
+  cat("Precision:  ", round(cm_caret$byClass["Precision"] * 100, 2), "%\n")
+  
+  # 6.Calculate ROC/AUC (return probability)
+  probs <- as.numeric(predict(
+    final_model, 
+    newx = x_test[evaluable, ], 
+    type = "response"
+  ))
+  roc_obj <- roc(
+    eval_pheno$actual_status, 
+    probs, 
+    levels = c("Low", "High"), 
+    direction = "<"
+  )
+  cat("AUC:        ", round(auc(roc_obj), 3), "\n")
 }
 
 ```
