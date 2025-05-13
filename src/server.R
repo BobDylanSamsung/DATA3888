@@ -43,72 +43,107 @@ attach_eda_outputs <- function(output) {
   })
 }
 
-attach_model_ouputs <- function(output) {
-  # Render the cross-validation plot
-  output$cv_plot <- renderPlot({
-    plot(cvfit_binom, main = "CV for Lasso-Logistic Model")
+attach_model_outputs <- function(output) {
+  
+  # Render the cross-validation plot for the Cox model
+  output$cv_plot_cox <- renderPlot({
+    plot(cvfit_cox, main = "CV for Penalized Cox Model")
   })
   
-  # Render the coefficients bar plot
-  # NOTE: plot doesnt show in box for some reason
-  #       will only render outside box if window is reshaped
-  output$coef_plot <- renderPlot({
-    ggplot(df_genes, aes(x = reorder(gene_id, coef), y = coef)) +
-      geom_bar(stat = "identity", fill = "skyblue") +
+  # Render the coefficients bar plot for the Cox model
+  output$coef_plot_cox <- renderPlot({
+    ggplot(df_genes_cox, aes(x = reorder(gene_id, coef), y = coef, fill = coef > 0)) +
+      geom_bar(stat = "identity") +
       coord_flip() +
       theme_minimal() +
-      labs(title = "Non-zero Coefficients in Lasso-Logistic Model")
+      scale_fill_manual(values = c("red","blue"), labels = c("High-risk","Protective")) +
+      labs(title = "Non-zero Coefficients in Penalized Cox Model", x = "Gene", y = "Coefficient")
   })
   
-  # Render confusion matrix
-  output$confusion_matrix <- renderText({
-    paste(capture.output(cm_results), collapse = "\n")
+  # Render survival curves if applicable
+  output$survival_curve <- renderPlot({
+    fit_km <- survfit(test_surv ~ test_pheno$predicted_risk)
+    ggsurvplot(fit_km, data = test_pheno, pval = TRUE, risk.table = TRUE, 
+               conf.int = TRUE, palette = c("blue", "red"), 
+               title = "Test Set Survival Curves by Risk Group")
+  })
+  
+  # Render C-index for model performance evaluation
+  output$c_index <- renderText({
+    paste("Test set C-index:", round(c_index, 2))
+  })
+  
+  # Render confusion matrix for risk prediction - analogous structure to logistic results
+  output$confusion_matrix_cox <- renderText({
+    capture.output(cat("\n==== Confusion Matrix ====\n"), 
+                   print(cm_caret), collapse = "\n")
   })
 }
 
-parse_csv <- function(csv) {
-  df <- read.csv(csv, header = TRUE)
+parse_csv <- function(csv, expected_genes) {
+  df <- read.csv(csv, header = TRUE, stringsAsFactors = FALSE)
   
   genes <- df[[1]]
   values <- as.numeric(df[[2]])
   names(values) <- genes
   
-  newdata <- as.data.frame(t(values))
-  colnames(newdata) <- genes
+  # Create a complete vector with zeroes for missing genes
+  complete_values <- setNames(rep(0, length(expected_genes)), expected_genes)
+  complete_values[names(values)] <- values
+  
+  # Transform into a one-row dataframe suitable for prediction
+  newdata <- as.data.frame(t(complete_values))
+  colnames(newdata) <- expected_genes
   
   return(newdata)
 }
 
 server <- function(input, output, session) {
   pred_result <- reactiveValues()
-  # Flag for whether we are showing the model or prediction
   pred_made <- reactiveVal(FALSE)
   output$show_model_plots <- reactive({ !pred_made() })
   outputOptions(output, "show_model_plots", suspendWhenHidden = FALSE)
   
-  # attach visualisations to output
+  # Attach visualisations to output
   attach_eda_outputs(output)
-  attach_model_ouputs(output)
+  attach_model_outputs(output)
   
   observeEvent(input$predict, {
     req(input$gene_csv)
     pred_made(TRUE)
     updateTabsetPanel(session, "main_tabs", selected = "Prediction")
     
-    newdata <- parse_csv(input$gene_csv$datapath)
+    # Define expected genes based on your model training
+    expected_genes <- colnames(X_train)  # Use genes from training features
     
-    cat(dim(newdata))
+    newdata <- parse_csv(input$gene_csv$datapath, expected_genes)  # Parse CSV with expected features
     
-    # Assuming newdata has been correctly prepared (as a one-row dataframe with gene IDs in columns)
-    pred_result <- list()  # Initialize a list to store prediction results
-    # Predict the class probabilities for the newdata
-    pred_probabilities <- predict(final_model_binom, newx = as.matrix(newdata), type = "response")
-    cutoff <- 0.5
-    pred_result$risk_group <- ifelse(pred_probabilities > cutoff, "High", "Low")
-    pred_result$probabilities <- pred_probabilities
-    view(pred_result)
+    # Initialize prediction result container
+    pred_result <- list()
+    
+    # Predict risk scores using Cox model's linear predictors
+    pred_result$risk_score <- predict(final_model_cox, newx = as.matrix(newdata), type = "link")
+    pred_result$risk_group <- ifelse(pred_result$risk_score > median(risk_scores_test), "High", "Low")
+    pred_result$hr <- exp(pred_result$risk_score)
+    
+    # Optionally fit survival curves based on new predictions
+    pred_result$fit_new <- survfit(Surv(time = gse$phenoData$months_survived, 
+                                        event = gse$phenoData$is_dead) ~ pred_result$risk_group, 
+                                   data = as.data.frame(gse$phenoData))
+    
+    pred_result$newdata <- newdata
+    
+    # Render prediction results
+    output$pred_view <- renderPrint({
+      print(pred_result)
+    })
+    
+    view(pred_result)  # Use view(pred_result) or equivalent for displaying pred results (ensure view exists)
   })
   
   # Reset to model plots if file re-uploaded
-  observeEvent(input$gene_csv, pred_made(FALSE))
+  observeEvent(input$gene_csv, {
+    pred_made(FALSE)
+    updateTabsetPanel(session, "main_tabs", selected = "model_plots") # adjust accordingly
+  })
 }

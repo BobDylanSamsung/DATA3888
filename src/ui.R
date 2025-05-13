@@ -7,7 +7,7 @@ sidebar <- dashboardSidebar(
   )
 )
 
-create_accordion_box <- function(output_id, title, output_type = c("plot", "table", "text"), height=300) {
+create_accordion_box <- function(output_id, title, output_type = c("plot", "table", "text"), height = 500, width = 800, content_after = NULL) {
   output_type <- match.arg(output_type)
   fluidRow(
     box(
@@ -17,12 +17,21 @@ create_accordion_box <- function(output_id, title, output_type = c("plot", "tabl
       collapsible = TRUE,
       collapsed = TRUE,
       width = 12,  # Full-width box
-      if (output_type == "plot") {
-        plotOutput(output_id, height)
-      } else if (output_type == "table") {
-        tableOutput(output_id)
-      } else {
-        verbatimTextOutput(output_id)
+      
+      # Output decision based on type
+      {
+        if (output_type == "plot") {
+          plotOutput(output_id, height = height, width = width)
+        } else if (output_type == "table") {
+          tableOutput(output_id)
+        } else {
+          verbatimTextOutput(output_id)
+        }
+      },
+      
+      # Conditionally render additional content
+      if (!is.null(content_after)) {
+        content_after
       }
     )
   )
@@ -51,18 +60,20 @@ eda_tab <- tabItem(tabName = "eda",
 )
 
 model_tab <- tabItem(tabName = "model",
-  create_accordion_box("cv_plot", "Cross-Validation Plot", "plot"),
-  create_accordion_box("coef_plot", "Coefficients Bar Plot", "plot"),
-  create_accordion_box("confusion_matrix", "Confusion Matrix", "text"),
-  plotOutput("coef_plot")
+  fluidRow(
+    valueBox(round(best_lambda_cox,2), "Best Lambda"),
+    valueBox(round(c_index, 2), "C-Index")
+  ),
+  create_accordion_box("cv_plot_cox", "Cross-Validation Plot for Cox Model", "plot",content_after = lambda_expl),
+  create_accordion_box("coef_plot_cox", "Coefficients Bar Plot for Cox Model", "plot", content_after = coef_expl),
+  create_accordion_box("survival_curve", "Kaplan-Meier Survival Curve", "plot", content_after = km_expl),
+  create_accordion_box("confusion_matrix_cox", "Confusion Matrix for Cox Model", "text")
 )
 
 predict_tab <- tabItem(tabName = "predict",
   div("To begin, please upload a csv file containing the gene expression of a patient"),
   fileInput("gene_csv", "Upload CSV of genes", accept = ".csv"),
   actionButton("predict", "Start Predict"),
-  
-  
 )
 
 ui <- dashboardPage(

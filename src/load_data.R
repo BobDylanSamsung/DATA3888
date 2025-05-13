@@ -69,14 +69,18 @@ expr_combined <- cbind(
 
 # Phenotype processing
 pheno287 <- GSE28735$phenoData %>%
-  mutate(is_dead = as.numeric(replace(`cancer_death:ch1`, `cancer_death:ch1` == "na", NA))) %>%
-  filter(!grepl("non-tumor tissue", source_name_ch1) & !is.na(is_dead)) %>%
-  rename(time = `survival_month:ch1`)
+  mutate(
+    is_dead = as.numeric(replace(`cancer_death:ch1`, `cancer_death:ch1` == "na", NA)),
+    months_survived = as.numeric(replace(`survival_month:ch1`, `survival_month:ch1` == "na", NA))
+  ) %>%
+  filter(!grepl("non-tumor tissue", source_name_ch1) & !is.na(is_dead))
 
 pheno624 <- GSE62452$phenoData %>%
-  mutate(is_dead = as.numeric(replace(`survival status:ch1`, `survival status:ch1` %in% c("na","?"), NA))) %>%
-  filter(grepl("Pancreatic tumor", `tissue:ch1`) & !is.na(is_dead)) %>%
-  rename(time = `survival months:ch1`)
+  mutate(
+    is_dead = as.numeric(replace(`survival status:ch1`, `survival status:ch1` %in% c("na","?"), NA)),
+    months_survived = as.numeric(replace(`survival months:ch1`, `survival months:ch1` %in% c("na","?"), NA))
+  ) %>%
+  filter(grepl("Pancreatic tumor", `tissue:ch1`) & !is.na(is_dead))
 
 pheno <- bind_rows(pheno287, pheno624)
 expr_mat <- expr_combined[, colnames(expr_combined) %in% rownames(pheno)]
