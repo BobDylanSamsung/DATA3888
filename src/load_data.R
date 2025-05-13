@@ -96,3 +96,11 @@ expr_mat <- expr_mat[, !colnames(expr_mat) %in% exclude_samples]
 subset_eMat_GSE28735 <- GSE28735$eMat[common_genes, ]
 subset_eMat_GSE62452 <- GSE62452$eMat[common_genes, ]
 combined_matrix <- cbind(subset_eMat_GSE28735, subset_eMat_GSE62452)
+combined_matrix <- combined_matrix[, colnames(combined_matrix) %in% rownames(pheno)]
+stopifnot(all(colnames(combined_matrix) == rownames(pheno)))
+
+gse <- list(
+  featureData = GSE28735$featureData,
+  phenoData = pheno,
+  eMat = combined_matrix
+)

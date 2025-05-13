@@ -1,38 +1,31 @@
-message("[INFO]: Constructing survival object...")
-surv_obj <- with(pheno, Surv(as.numeric(time), is_dead))
+# Prepare training and test datasets
+X <- t(gse$eMat) %>% as.matrix()
+y <- as.numeric(gse$phenoData$is_dead)
 
-message("[INFO]: Preparing expression matrix...")
-X <- t(expr_mat) %>% as.matrix()
+train_idx <- createDataPartition(y, p = 0.8, list = FALSE)
+X_train <- X[train_idx, ]
+y_train <- y[train_idx]
+X_test  <- X[-train_idx, ]
+y_test  <- y[-train_idx]
 
-# Lasso-Cox for feature selection
-message("[INFO]: Performing cross-validation for Lasso-Cox model...")
-set.seed(3888)
-cvfit <- cv.glmnet(X, surv_obj, family = "cox", alpha = 1)
+# Fit model using cross-validation
+cvfit_binom <- cv.glmnet(x = X_train, y = y_train, family = "binomial", alpha = 1, nfolds = 5)
 
-message("[INFO]: Extracting best lambda from cross-validation...")
-best_lambda <- cvfit$lambda.min
+# Save lambda value
+best_lambda <- cvfit_binom$lambda.min
 
-message("[INFO]: Building Lasso-Cox model with best lambda...")
-lasso_model <- glmnet(X, surv_obj, family = "cox", alpha = 1, lambda = best_lambda)
-
-message("[INFO]: Extracting non-zero coefficients for selected genes...")
-gene_coefs <- data.frame(
-  gene = colnames(X)[coef(lasso_model)@i + 1],
-  coef = coef(lasso_model)@x
+# Train final model with the optimal lambda
+final_model_binom <- glmnet(x = X_train, y = y_train, family = "binomial", alpha = 1, lambda = best_lambda)
+coef_binom <- coef(final_model_binom)
+nz_idx <- which(coef_binom != 0)
+df_genes <- data.frame(
+  gene_id = rownames(coef_binom)[nz_idx],
+  coef    = as.numeric(coef_binom[nz_idx])
 )
-selected_genes <- gene_coefs$gene
 
-message("[INFO]: Preparing data frame for CoxPH model refitting...")
-train_df <- data.frame(
-  time   = as.numeric(pheno$time),
-  status = as.numeric(pheno$is_dead),
-  as.data.frame(X[, selected_genes, drop = FALSE])
-)
-colnames(train_df)[3:ncol(train_df)] <- selected_genes
+# Predict on the test set
+pred_test <- predict(final_model_binom, newx = X_test, type = "class")
+pred_factor <- factor(pred_test, levels = c(0,1), labels = c("Alive","Dead"))
+actual_factor <- factor(y_test, levels = c(0,1), labels = c("Alive","Dead"))
 
-message("[INFO]: Refitting the CoxPH model...")
-coxph_model <- coxph(Surv(time, status) ~ ., data = train_df)
-
-message("[INFO]: Calculating risk scores and determining cut-off...")
-train_lp <- predict(coxph_model, newdata = train_df, type = "lp")
-cutoff <- median(train_lp, na.rm = TRUE)
+cm_results <- confusionMatrix(pred_factor, actual_factor, positive = "Dead")
