@@ -90,8 +90,8 @@ dead_0_sample <- rownames(pheno)[pheno$is_dead == 0][4]
 dead_1_sample <- rownames(pheno)[pheno$is_dead == 1][4]
 expr_0 <- expr_mat[, dead_0_sample, drop = FALSE]
 expr_1 <- expr_mat[, dead_1_sample, drop = FALSE]
-write.csv(expr_0, file = "predict_test_dead0.csv")
-write.csv(expr_1, file = "predict_test_dead1.csv")
+write.csv(expr_0, file = "patient_data/not_dead.csv")
+write.csv(expr_1, file = "patient_data/is_dead.csv")
 
 exclude_samples <- c(dead_0_sample, dead_1_sample)
 pheno <- pheno[!rownames(pheno) %in% exclude_samples, ]

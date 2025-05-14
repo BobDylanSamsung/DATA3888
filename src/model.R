@@ -14,8 +14,7 @@ train_surv <- surv_obj[train_idx]
 test_surv <- surv_obj[-train_idx]
 
 # Fit penalized Cox model using cross-validation
-set.seed(3888)
-cvfit_cox <- cv.glmnet(x = X_train, y = train_surv, family = "cox", alpha = 1, nfolds = 10)
+cvfit_cox <- cv.glmnet(x = X_train, y = train_surv, family = "cox", alpha = 1, nfolds = 5)
 
 # Select the optimal lambda
 best_lambda_cox <- cvfit_cox$lambda.min
@@ -45,7 +44,7 @@ test_pheno$predicted_risk <- factor(test_pheno$predicted_risk, levels = c("Low",
 # Construct actual labels for evaluation (risk groups using median)
 test_pheno$actual_status <- factor(
   ifelse(
-    test_pheno$is_dead == 1 & test_pheno$months_survived <= median(test_pheno$months_survived),
+    test_pheno$is_dead == 1,
     "High",
     "Low"
   ),
