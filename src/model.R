@@ -3,7 +3,7 @@ surv_obj <- with(gse$phenoData, Surv(as.numeric(months_survived), as.numeric(is_
 
 # Prepare feature matrix
 X <- t(gse$eMat) %>% as.matrix()
-train_idx <- createDataPartition(gse$phenoData$is_dead, p = 0.8, list = FALSE)
+train_idx <- createDataPartition(factor(gse$phenoData$is_dead), p = 0.80, list = FALSE)
 
 safe_names <- make.names(colnames(X), unique = TRUE)
 colnames(X) <- safe_names
@@ -74,9 +74,9 @@ X_test_selected_std <- scale(X_test_selected,
 
 # Set up CoxBoost - note it requires time and status separately
 train_time <- train_df$time
-train_is_dead <- train_df$is_dead  # Your variable name is fine
+train_is_dead <- train_df$is_dead  
 test_time <- test_df$time
-test_is_dead <- test_df$is_dead    # Your variable name is fine
+test_is_dead <- test_df$is_dead    
 
 # choose a reasonable penalty
 penalty_val <- 4
@@ -107,10 +107,41 @@ coxboost_model <- CoxBoost(
   unpen.index = NULL
 )
 
+# linear predictor for the training data
+lp_train <- as.vector(
+  predict(coxboost_model,
+          newdata = X_train_selected_std,
+          type    = "lp",
+          at.step = optimal_steps)   # <- returns a vector
+)
+
+# data frame that will be fed to coxph()
+df_train <- data.frame(
+  time   = train_time,
+  status = train_is_dead,
+  lp     = lp_train       
+)
+
+# “null” Cox model 
+coxph_base <- coxph(
+  Surv(time, status) ~ offset(lp),   
+  data   = df_train,
+  method = "breslow"
+)
+
+bh <- basehaz(coxph_base, centered = FALSE)
+
+coxboost_model$bh_time   <- bh$time
+coxboost_model$bh_hazard <- bh$hazard
+coxboost_model$stepno <- optimal_steps
+
 # Predict on test set
-risk_scores_test <- predict(coxboost_model,
-                            newdata = X_test_selected_std,
-                            type = "lp")
+risk_scores_test <- as.vector(
+  predict(coxboost_model,
+          newdata = X_test_selected_std,
+          type    = "lp",
+          at.step = optimal_steps)
+)
 
 # Split test data into high/low risk groups using median cutoff
 risk_groups <- ifelse(risk_scores_test > median(risk_scores_test), "High", "Low")

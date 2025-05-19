@@ -11,14 +11,19 @@ library(knitr)
 library(limma)
 library(pheatmap)
 library(randomForestSRC)
+library(pec)
 library(pROC)
+library(prodlim)
 library(RColorBrewer)
+library(riskRegression)
+library(rms)
 library(reshape2)
 library(shiny)
 library(shinydashboard)
 library(survival)
 library(survminer)
 library(tidyverse)
+library(timeROC)
 
 set.seed(3888)
 
@@ -46,3 +51,28 @@ km_expl <- HTML('
   Log-rank test p-value: p < 0.0001, showing that the difference between the two survival curves is statistically highly significant. This means that the risk score based on the 29 selected genes can clearly distinguish between good and poor prognosis.<br>
   Risk table (Number at risk): Shown below the curves, it displays the number of patients still under follow-up at each time point, helping to evaluate the reliability of survival estimates in later stages.
 ')
+
+## ================================================================
+##  S3 method required by riskRegression::Score 
+## ================================================================
+predictRisk.CoxBoost <- function(object, newdata, times, ...) {
+  
+  # make sure the covariate order is identical
+  X <- as.matrix(newdata[, object$xnames, drop = FALSE])
+  
+  # linear predictor for the NEW data
+  lp <- as.vector(predict(object, newdata = X, type = "lp"))
+  
+  # grab the baseline cumulative hazard that we stored in the model;
+  # build a step function so we can evaluate it at arbitrary 'times'
+  H0_step <- stats::stepfun(object$bh_time,
+                            c(0, object$bh_hazard))
+  
+  H0_vec  <- H0_step(times)          # baseline cumul. haz. at all eval times
+  
+  # matrix:  nrow = n_obs,  ncol = length(times)
+  surv_mat <- exp(-outer(exp(lp), H0_vec, "*"))
+  
+  risk_mat <- 1 - surv_mat           # Score() expects RISKS
+  return(risk_mat)
+}

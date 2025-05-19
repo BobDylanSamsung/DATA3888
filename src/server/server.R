@@ -1,3 +1,4 @@
+source("src/server/attach_model_outputs.R")
 attach_eda_outputs <- function(output) {
   # Render Expression Histogram
   output$expression_histogram <- renderPlot({
@@ -40,85 +41,6 @@ attach_eda_outputs <- function(output) {
              show_colnames = FALSE,
              annotation_col = annotation_col_eda,
              main = "Top 100 Variable Genes - All Samples")
-  })
-}
-
-attach_model_outputs <- function(output) {
-  
-  # Render the cross-validation plot for the CoxBoost model
-  output$cv_plot_cox <- renderPlot({
-    # Plot CoxBoost CV results
-    plot(cv_res$cv.res$logplik ~ seq_len(length(cv_res$cv.res$logplik)),
-         type = "b", xlab = "Boosting Steps", ylab = "Cross-validated Log Partial Likelihood",
-         main = "Cross-Validation for CoxBoost")
-    abline(v = optimal_steps, col = "red", lty = 2)
-    text(optimal_steps, min(cv_res$cv.res$logplik), 
-         paste("Optimal:", optimal_steps), pos = 4, col = "red")
-  })
-  
-  # Render the feature importance plot from Random Forest
-  output$coef_plot_cox <- renderPlot({
-    # Extract top features from Random Forest
-    feature_imp <- data.frame(
-      gene_id = selected_features,
-      importance = var_imp$importance[selected_features]
-    )
-    feature_imp <- feature_imp[order(feature_imp$importance, decreasing = TRUE),]
-    
-    ggplot(feature_imp, aes(x = reorder(gene_id, importance), y = importance)) +
-      geom_bar(stat = "identity", fill = "steelblue") +
-      coord_flip() +
-      theme_minimal() +
-      labs(title = "Feature Importance from Random Forest", 
-           x = "Gene", y = "Minimal Depth Importance")
-  })
-  
-  # Extract CoxBoost coefficients for display
-  output$coxboost_coef_plot <- renderPlot({
-    # Get coefficients from CoxBoost model
-    coxboost_coefs <- as.numeric(coxboost_model$coefficients)
-    names(coxboost_coefs) <- colnames(X_train_selected_std)
-    
-    # Create data frame for plotting
-    coef_df <- data.frame(
-      gene_id = names(coxboost_coefs),
-      coef = coxboost_coefs
-    )
-    coef_df <- coef_df[order(abs(coef_df$coef), decreasing = TRUE),]
-    
-    ggplot(coef_df, aes(x = reorder(gene_id, abs(coef)), y = coef, fill = coef > 0)) +
-      geom_bar(stat = "identity") +
-      coord_flip() +
-      theme_minimal() +
-      scale_fill_manual(values = c("red","blue"), labels = c("High-risk","Protective")) +
-      labs(title = "CoxBoost Model Coefficients", x = "Gene", y = "Coefficient")
-  })
-  
-  # Render survival curves 
-  output$survival_curve <- renderPlot({
-    # Create risk groups based on median risk score
-    test_risk_groups <- factor(risk_groups, levels = c("Low", "High"))
-    
-    # Create survival fit
-    fit_km <- survfit(Surv(test_time, test_is_dead) ~ test_risk_groups)
-    
-    # Plot with ggsurvplot
-    ggsurvplot(fit_km, data = data.frame(time = test_time, status = test_is_dead, 
-                                         risk = test_risk_groups),
-               pval = TRUE, risk.table = TRUE, conf.int = TRUE, 
-               palette = c("blue", "red"), 
-               title = "Test Set Survival Curves by Risk Group")
-  })
-  
-  # Render C-index for model performance evaluation
-  output$c_index <- renderText({
-    paste("Test set C-index:", round(c_index, 2))
-  })
-  
-  # Render confusion matrix for risk prediction
-  output$confusion_matrix_cox <- renderText({
-    capture.output(cat("\n==== Confusion Matrix ====\n"), 
-                   print(cm_caret), collapse = "\n")
   })
 }
 

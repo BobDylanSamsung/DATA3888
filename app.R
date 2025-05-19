@@ -1,17 +1,16 @@
 # Define the path to the environment image
 environment_image_path <- "environment_image.RData"
+source("src/global.R")
 
 # Check if environment image exists
 if (file.exists(environment_image_path)) {
   # Load the environment image if it exists
   message("Loading pre-trained model from saved environment...")
-  load(environment_image_path)
+  #load(environment_image_path)
   message("Environment loaded successfully!")
 } else {
   # Run the full pipeline if environment image doesn't exist
   message("No saved environment found. Running full data processing pipeline...")
-  
-  source("src/global.R")
   message("[1/4]: Loading Datasets")
   source("src/load_data.R")
   message("[2/4]: Performing EDA")
@@ -27,7 +26,7 @@ if (file.exists(environment_image_path)) {
 
 # Load UI and server components (always needed regardless of environment loading)
 message("[4/4]: Loading UI and server")
-source("src/server.R")
+source("src/server/server.R")
 source("src/ui/ui.R")
 
 # Launch the Shiny app

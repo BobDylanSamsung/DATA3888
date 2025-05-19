@@ -1,3 +1,6 @@
 archive
 archive/*
 environment_image.Rdata
+.Renviron
+.RData
+.Rhistory
