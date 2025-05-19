@@ -45,26 +45,68 @@ attach_eda_outputs <- function(output) {
 
 attach_model_outputs <- function(output) {
   
-  # Render the cross-validation plot for the Cox model
+  # Render the cross-validation plot for the CoxBoost model
   output$cv_plot_cox <- renderPlot({
-    plot(cvfit_cox, main = "CV for Penalized Cox Model")
+    # Plot CoxBoost CV results
+    plot(cv_res$cv.res$logplik ~ seq_len(length(cv_res$cv.res$logplik)),
+         type = "b", xlab = "Boosting Steps", ylab = "Cross-validated Log Partial Likelihood",
+         main = "Cross-Validation for CoxBoost")
+    abline(v = optimal_steps, col = "red", lty = 2)
+    text(optimal_steps, min(cv_res$cv.res$logplik), 
+         paste("Optimal:", optimal_steps), pos = 4, col = "red")
   })
   
-  # Render the coefficients bar plot for the Cox model
+  # Render the feature importance plot from Random Forest
   output$coef_plot_cox <- renderPlot({
-    ggplot(df_genes_cox, aes(x = reorder(gene_id, coef), y = coef, fill = coef > 0)) +
+    # Extract top features from Random Forest
+    feature_imp <- data.frame(
+      gene_id = selected_features,
+      importance = var_imp$importance[selected_features]
+    )
+    feature_imp <- feature_imp[order(feature_imp$importance, decreasing = TRUE),]
+    
+    ggplot(feature_imp, aes(x = reorder(gene_id, importance), y = importance)) +
+      geom_bar(stat = "identity", fill = "steelblue") +
+      coord_flip() +
+      theme_minimal() +
+      labs(title = "Feature Importance from Random Forest", 
+           x = "Gene", y = "Minimal Depth Importance")
+  })
+  
+  # Extract CoxBoost coefficients for display
+  output$coxboost_coef_plot <- renderPlot({
+    # Get coefficients from CoxBoost model
+    coxboost_coefs <- as.numeric(coxboost_model$coefficients)
+    names(coxboost_coefs) <- colnames(X_train_selected_std)
+    
+    # Create data frame for plotting
+    coef_df <- data.frame(
+      gene_id = names(coxboost_coefs),
+      coef = coxboost_coefs
+    )
+    coef_df <- coef_df[order(abs(coef_df$coef), decreasing = TRUE),]
+    
+    ggplot(coef_df, aes(x = reorder(gene_id, abs(coef)), y = coef, fill = coef > 0)) +
       geom_bar(stat = "identity") +
       coord_flip() +
       theme_minimal() +
       scale_fill_manual(values = c("red","blue"), labels = c("High-risk","Protective")) +
-      labs(title = "Non-zero Coefficients in Penalized Cox Model", x = "Gene", y = "Coefficient")
+      labs(title = "CoxBoost Model Coefficients", x = "Gene", y = "Coefficient")
   })
   
-  # Render survival curves if applicable
+  # Render survival curves 
   output$survival_curve <- renderPlot({
-    fit_km <- survfit(test_surv ~ test_pheno$predicted_risk)
-    ggsurvplot(fit_km, data = test_pheno, pval = TRUE, risk.table = TRUE, 
-               conf.int = TRUE, palette = c("blue", "red"), 
+    # Create risk groups based on median risk score
+    test_risk_groups <- factor(risk_groups, levels = c("Low", "High"))
+    
+    # Create survival fit
+    fit_km <- survfit(Surv(test_time, test_is_dead) ~ test_risk_groups)
+    
+    # Plot with ggsurvplot
+    ggsurvplot(fit_km, data = data.frame(time = test_time, status = test_is_dead, 
+                                         risk = test_risk_groups),
+               pval = TRUE, risk.table = TRUE, conf.int = TRUE, 
+               palette = c("blue", "red"), 
                title = "Test Set Survival Curves by Risk Group")
   })
   
@@ -73,7 +115,7 @@ attach_model_outputs <- function(output) {
     paste("Test set C-index:", round(c_index, 2))
   })
   
-  # Render confusion matrix for risk prediction - analogous structure to logistic results
+  # Render confusion matrix for risk prediction
   output$confusion_matrix_cox <- renderText({
     capture.output(cat("\n==== Confusion Matrix ====\n"), 
                    print(cm_caret), collapse = "\n")
@@ -99,32 +141,46 @@ parse_csv <- function(csv, expected_genes) {
 }
 
 # Function to process prediction data and return results
-process_prediction <- function(csv_path, model, test_data, risk_scores) {
-  expected_genes <- colnames(X_train)
-  newdata <- parse_csv(csv_path, expected_genes)
+process_prediction <- function(csv_path, coxboost_model, selected_features, train_center, train_scale, cutoff) {
+  # Parse the CSV
+  newdata <- parse_csv(csv_path, colnames(X))
   
-  # Calculate prediction metrics
-  risk_score <- predict(model, newx = as.matrix(newdata), type = "link")
-  risk_group <- ifelse(risk_score > median(risk_scores), "High", "Low")
+  # Extract only the selected features
+  newdata_selected <- newdata[, selected_features, drop = FALSE]
+  
+  # Scale using training parameters
+  newdata_scaled <- scale(newdata_selected, 
+                          center = train_center, 
+                          scale = train_scale)
+  
+  # Calculate prediction metrics using CoxBoost model
+  risk_score <- predict(coxboost_model, newdata = newdata_scaled, type = "lp")
+  risk_group <- ifelse(risk_score > cutoff, "High", "Low")
   hr <- exp(risk_score)
   
   # Estimate median survival based on risk group
   median_surv <- ifelse(
     risk_group == "High",
-    median(test_data$months_survived[test_data$predicted_risk == "High"]),
-    median(test_data$months_survived[test_data$predicted_risk == "Low"])
+    median(test_time[risk_groups == "High"]),
+    median(test_time[risk_groups == "Low"])
   )
+  
+  # Get CoxBoost coefficients
+  coxboost_coefs <- as.numeric(coxboost_model$coefficients)
+  names(coxboost_coefs) <- colnames(X_train_selected_std)
   
   # Calculate gene contributions
   gene_contributions <- data.frame(
-    Gene = rownames(coef_cox)[nz_idx_cox],
-    Coefficient = as.numeric(coef_cox[nz_idx_cox]),
-    Expression = as.numeric(newdata[1, rownames(coef_cox)[nz_idx_cox]]),
-    Contribution = as.numeric(coef_cox[nz_idx_cox] * newdata[1, rownames(coef_cox)[nz_idx_cox]])
+    Gene = selected_features,
+    Coefficient = coxboost_coefs,
+    Expression = as.numeric(newdata_scaled[1, ]),
+    Contribution = coxboost_coefs * as.numeric(newdata_scaled[1, ])
   )
   gene_contributions <- gene_contributions[order(abs(gene_contributions$Contribution), decreasing = TRUE), ]
+  
   # Add personalized risk metrics
-  risk_percentile <- ecdf(risk_scores)(risk_score) * 100
+  risk_percentile <- ecdf(risk_scores_test)(risk_score) * 100
+  
   # Return all results
   return(list(
     risk_score = risk_score,
@@ -257,6 +313,15 @@ server <- function(input, output, session) {
   # Initialize prediction outputs
   clear_prediction_outputs(output)
   
+  # Store model parameters for prediction
+  model_params <- list(
+    coxboost_model = coxboost_model,
+    selected_features = selected_features,
+    train_center = attr(X_train_selected_std, "scaled:center"),
+    train_scale = attr(X_train_selected_std, "scaled:scale"),
+    cutoff = median(risk_scores_test)
+  )
+  
   # Handle prediction button click
   observeEvent(input$predict, {
     req(input$gene_csv)
@@ -267,15 +332,17 @@ server <- function(input, output, session) {
       # Process the prediction
       pred_results <- process_prediction(
         input$gene_csv$datapath, 
-        final_model_cox, 
-        test_pheno, 
-        risk_scores_test
+        model_params$coxboost_model, 
+        model_params$selected_features,
+        model_params$train_center,
+        model_params$train_scale,
+        model_params$cutoff
       )
       # Attach the prediction outputs to the UI
       attach_prediction_outputs(
         output, 
         pred_results, 
-        test_pheno, 
+        risk_groups,
         risk_scores_test, 
         c_index
       )

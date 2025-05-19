@@ -3,9 +3,17 @@ surv_obj <- with(gse$phenoData, Surv(as.numeric(months_survived), as.numeric(is_
 
 # Prepare feature matrix
 X <- t(gse$eMat) %>% as.matrix()
+train_idx <- createDataPartition(gse$phenoData$is_dead, p = 0.8, list = FALSE)
+
+safe_names <- make.names(colnames(X), unique = TRUE)
+colnames(X) <- safe_names
+lookup <- data.frame(
+  safe = safe_names,              # length 28869
+  raw  = rownames(gse$eMat),      # length 28869
+  stringsAsFactors = FALSE
+)
 
 # Split into training and testing sets
-train_idx <- createDataPartition(gse$phenoData$is_dead, p = 0.8, list = FALSE)
 X_train <- X[train_idx, ]
 X_test  <- X[-train_idx, ]
 
@@ -13,50 +21,113 @@ X_test  <- X[-train_idx, ]
 train_surv <- surv_obj[train_idx]
 test_surv <- surv_obj[-train_idx]
 
-# Fit penalized Cox model using cross-validation
-cvfit_cox <- cv.glmnet(x = X_train, y = train_surv, family = "cox", alpha = 1, nfolds = 5)
-
-# Select the optimal lambda
-best_lambda_cox <- cvfit_cox$lambda.min
-
-# Fit final Cox model with optimal lambda
-final_model_cox <- glmnet(x = X_train, y = train_surv, family = "cox", alpha = 1, lambda = best_lambda_cox)
-
-# Extract coefficients from the final model
-coef_cox <- coef(final_model_cox)
-nz_idx_cox <- which(coef_cox != 0)
-df_genes_cox <- data.frame(
-  gene_id = colnames(X_train)[nz_idx_cox],
-  coef    = as.numeric(coef_cox[nz_idx_cox])
+# Create dataframes for training and testing
+train_df <- data.frame(
+  time    = as.numeric(gse$phenoData$months_survived[train_idx]),
+  is_dead = as.numeric(gse$phenoData$is_dead[train_idx]),
+  as.data.frame(X_train, check.names = FALSE)
 )
 
-# Use the model to predict risk scores on the test set (linear predictors)
-risk_scores_test <- predict(final_model_cox, newx = X_test, type = "link")
-
-# Split phenotype data into training and testing sets
-train_pheno <- gse$phenoData[train_idx, ]
-test_pheno <- gse$phenoData[-train_idx, ]
-
-# Compute risk scores for each test sample, using precomputed risk scores if applicable
-test_pheno$predicted_risk <- ifelse(risk_scores_test > median(risk_scores_test), "High", "Low")
-test_pheno$predicted_risk <- factor(test_pheno$predicted_risk, levels = c("Low", "High"))
-
-# Construct actual labels for evaluation (risk groups using median)
-test_pheno$actual_status <- factor(
-  ifelse(
-    test_pheno$is_dead == 1,
-    "High",
-    "Low"
-  ),
-  levels = c("Low", "High") 
+test_df  <- data.frame(
+  time    = as.numeric(gse$phenoData$months_survived[-train_idx]),
+  is_dead = as.numeric(gse$phenoData$is_dead[-train_idx]),
+  as.data.frame(X_test , check.names = FALSE)
 )
 
-# Calculate C-index for model performance evaluation on test set
-c_index <- rcorr.cens(-risk_scores_test, test_surv)[1]
+message("[INFO]: Selecting Features")
 
-# Generate confusion matrix using caret
+# Run Random Survival Forest for feature selection
+rsf_model <- rfsrc(Surv(time, is_dead) ~ ., data = train_df, 
+                   ntree = 1000, 
+                   importance = TRUE)
+
+# Get variable importance by minimal depth
+var_imp <- var.select(rsf_model, method = "md", verbose = FALSE)
+
+top_by_md <- var_imp$md.obj$topvars          # may be character(0)
+
+if (length(top_by_md) == 0) {                # fall-back: use VIMP
+  vimp_sorted <- sort(rsf_model$importance,
+                      decreasing = TRUE,
+                      na.last   = TRUE)
+  top_by_md <- names(vimp_sorted)
+}
+
+n_features_to_select <- 15
+selected_features <- top_by_md[1:min(n_features_to_select,
+                                     length(top_by_md))]
+
+if (length(selected_features) == 0)
+  stop("[ERROR]: variable-selection produced 0 features")
+
+message("[INFO]: Number of features selected: ", length(selected_features))
+
+# Prepare data for CoxBoost with selected features only
+X_train_selected <- X_train[, selected_features, drop = FALSE]
+X_test_selected <- X_test[, selected_features, drop = FALSE]
+
+# STANDARDIZATION STEP
+X_train_selected_std <- scale(X_train_selected)
+X_test_selected_std <- scale(X_test_selected, 
+                             center = attr(X_train_selected_std, "scaled:center"),
+                             scale = attr(X_train_selected_std, "scaled:scale"))
+
+# Set up CoxBoost - note it requires time and status separately
+train_time <- train_df$time
+train_is_dead <- train_df$is_dead  # Your variable name is fine
+test_time <- test_df$time
+test_is_dead <- test_df$is_dead    # Your variable name is fine
+
+# choose a reasonable penalty
+penalty_val <- 4
+
+message("[INFO]: Calculating optimal boosting steps")
+# Cross‐validate to find optimal number of boosting steps
+cv_res <- cv.CoxBoost(
+  time      = train_time,
+  status    = train_is_dead,
+  x         = X_train_selected_std,
+  maxstepno = 100,
+  K         = 10,
+  penalty   = penalty_val,
+  unpen.index = NULL
+)
+
+# extract optimal steps
+optimal_steps <- cv_res$optimal.step
+message("[INFO]: Optimal boosting steps = ", optimal_steps)
+message("[INFO]: Fitting model")
+# Fit final CoxBoost model with the same penalty
+coxboost_model <- CoxBoost(
+  time      = train_time,
+  status    = train_is_dead,
+  x         = X_train_selected_std,
+  stepno    = optimal_steps,
+  penalty   = penalty_val,
+  unpen.index = NULL
+)
+
+# Predict on test set
+risk_scores_test <- predict(coxboost_model,
+                            newdata = X_test_selected_std,
+                            type = "lp")
+
+# Split test data into high/low risk groups using median cutoff
+risk_groups <- ifelse(risk_scores_test > median(risk_scores_test), "High", "Low")
+risk_groups <- factor(risk_groups, levels = c("Low", "High"))
+
+# Create actual status for comparison
+actual_is_dead <- factor(
+  ifelse(test_is_dead == 1, "High", "Low"),
+  levels = c("Low", "High")
+)
+
+# Calculate C-index
+c_index <- rcorr.cens(-risk_scores_test, Surv(test_time, test_is_dead))[1]
+
+# Generate confusion matrix
 cm_caret <- confusionMatrix(
-  data = test_pheno$predicted_risk,
-  reference = test_pheno$actual_status,
+  data = risk_groups,
+  reference = actual_is_dead,
   positive = "High"
 )

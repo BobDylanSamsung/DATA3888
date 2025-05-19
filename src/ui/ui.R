@@ -52,13 +52,22 @@ eda_tab <- tabItem(tabName = "eda",
 
 model_tab <- tabItem(tabName = "model",
   fluidRow(
-    valueBox(round(best_lambda_cox,2), "Best Lambda"),
-    valueBox(round(c_index, 2), "C-Index")
+   valueBox(optimal_steps, "Optimal Boosting Steps"),
+   valueBox(round(c_index, 2), "C-Index")
   ),
-  create_accordion_box("cv_plot_cox", "Cross-Validation Plot for Cox Model", "plot",content_after = lambda_expl),
-  create_accordion_box("coef_plot_cox", "Coefficients Bar Plot for Cox Model", "plot", content_after = coef_expl),
-  create_accordion_box("survival_curve", "Kaplan-Meier Survival Curve", "plot", content_after = km_expl),
-  create_accordion_box("confusion_matrix_cox", "Confusion Matrix for Cox Model", "text")
+  create_accordion_box("cv_plot_cox", "Cross-Validation Plot for CoxBoost", "plot",
+                      content_after = HTML("<p>This plot shows how the cross-validated log partial likelihood changes with the number of boosting steps. The vertical red line indicates the optimal number of steps selected.</p>")
+  ),
+  create_accordion_box("coef_plot_cox", "Feature Importance from Random Forest", "plot", 
+                      content_after = HTML("<p>Features were selected using Random Forest Minimal Depth method, which identifies variables that best split the data early in the tree.</p>")
+  ),
+  create_accordion_box("coxboost_coef_plot", "CoxBoost Model Coefficients", "plot",
+                      content_after = HTML("<p>Coefficients from the CoxBoost model show the impact of each gene on survival outcome.</p>")
+  ),
+  create_accordion_box("survival_curve", "Kaplan-Meier Survival Curve", "plot", 
+                      content_after = HTML("<p>This curve shows the survival probability over time for patients in high and low risk groups, as determined by the CoxBoost model.</p>")
+  ),
+  create_accordion_box("confusion_matrix_cox", "Confusion Matrix", "text")
 )
 
 predict_tab <- tabItem(tabName = "predict",
