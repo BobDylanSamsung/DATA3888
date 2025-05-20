@@ -67,6 +67,9 @@ predict_tab <- tabItem(tabName = "predict",
    )
   ),
   
+  # Error message display area
+  uiOutput("error_message"),
+  
   # Only show results after prediction is made
   conditionalPanel(
    condition = "output.show_model_plots == false",
@@ -79,36 +82,58 @@ predict_tab <- tabItem(tabName = "predict",
        solidHeader = TRUE,
        width = 12,
        fluidRow(
-         column(width = 3, valueBoxOutput("risk_box", width = NULL)),
-         column(width = 3, valueBoxOutput("group_box", width = NULL)),
-         column(width = 3, valueBoxOutput("hr_box", width = NULL)),
-         column(width = 3, valueBoxOutput("percentile_box", width = NULL))
-       )
+         column(width = 2, valueBoxOutput("risk_box", width = NULL)),
+         column(width = 2, valueBoxOutput("group_box", width = NULL)),
+         column(width = 2, valueBoxOutput("hr_box", width = NULL)),
+         column(width = 2, valueBoxOutput("median_box", width = NULL)),
+         column(width = 4, valueBoxOutput("percentile_box", width = NULL))
+       ),
+       uiOutput("risk_summary")
      )
    ),
    
+   # Second row: Survival curve and risk distribution
    fluidRow(
-     # Top genes box
+     # Survival curve
      box(
-       title = "Top Contributing Genes",
+       title = "Predicted Survival",
        status = "info",
        solidHeader = TRUE,
        width = 6,
-       h4("Genes Most Affecting Prediction"),
-       tableOutput("top_genes_table"),
-       HTML("<p><i>Positive contribution values indicate higher risk, negative values indicate protective effect.</i></p>")
+       plotOutput("survival_curve", height = 350),
+       HTML("<p>This curve shows the estimated survival probability over time. The red dashed lines indicate the median survival time.</p>")
      ),
      # Risk score histogram
      box(
        title = "Risk Score Distribution",
        status = "primary",
        solidHeader = TRUE,
-       collapsible = TRUE,
        width = 6,
-       plotOutput("pred_risk_hist", height = 350),
-       HTML("<p>This histogram shows the distribution of risk scores in the test set. 
-  The red line indicates where this patient's risk score falls relative to others.</p>")
+       plotOutput("risk_distribution", height = 350),
+       HTML("<p>This histogram shows how this patient's risk score compares to the test cohort. The red line indicates the patient's position.</p>")
+     )
+   ),
+   
+   # Third row: Gene table and gene contributions
+   fluidRow(
+     # Gene table box
+     box(
+       title = "Top Contributing Genes",
+       status = "warning",
+       solidHeader = TRUE,
+       width = 6,
+       DT::DTOutput("gene_table"),
+       HTML("<p><i>Positive contribution values indicate higher risk, negative values indicate protective effect.</i></p>")
      ),
+     # Gene contribution visualization
+     box(
+       title = "Gene Contribution Visualization",
+       status = "success",
+       solidHeader = TRUE,
+       width = 6,
+       plotOutput("gene_contributions", height = 400),
+       HTML("<p>This plot shows the top genes contributing to the risk prediction. Red bars increase risk while blue bars decrease risk.</p>")
+     )
    )
   )
 )
