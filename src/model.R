@@ -34,12 +34,14 @@ test_df  <- data.frame(
   as.data.frame(X_test , check.names = FALSE)
 )
 
-message("[INFO]: Selecting Features")
+message("[INFO]: Starting feature selection with Random Survival Forest...")
 
 # Run Random Survival Forest for feature selection
+message("[INFO]: Growing 1000 trees for RSF model...")
 rsf_model <- rfsrc(Surv(time, is_dead) ~ ., data = train_df, 
                    ntree = 1000, 
                    importance = TRUE)
+message("[INFO]: RSF model completed. Calculating variable importance...")
 
 # Get variable importance by minimal depth
 var_imp <- var.select(rsf_model, method = "md", verbose = FALSE)
@@ -47,6 +49,7 @@ var_imp <- var.select(rsf_model, method = "md", verbose = FALSE)
 top_by_md <- var_imp$md.obj$topvars          # may be character(0)
 
 if (length(top_by_md) == 0) {                # fall-back: use VIMP
+  message("[INFO]: No variables selected by minimal depth. Using VIMP instead...")
   vimp_sorted <- sort(rsf_model$importance,
                       decreasing = TRUE,
                       na.last   = TRUE)
@@ -66,7 +69,7 @@ message("[INFO]: Number of features selected: ", length(selected_features))
 X_train_selected <- X_train[, selected_features, drop = FALSE]
 X_test_selected <- X_test[, selected_features, drop = FALSE]
 
-# STANDARDIZATION STEP
+# Standardize the data
 X_train_selected_std <- scale(X_train_selected)
 X_test_selected_std <- scale(X_test_selected, 
                              center = attr(X_train_selected_std, "scaled:center"),
@@ -78,26 +81,98 @@ train_is_dead <- train_df$is_dead
 test_time <- test_df$time
 test_is_dead <- test_df$is_dead    
 
-# choose a reasonable penalty
-penalty_val <- 4
+# Hyperparameter tuning for CoxBoost
+message("[INFO]: Starting hyperparameter tuning for CoxBoost...")
 
-message("[INFO]: Calculating optimal boosting steps")
-# Cross validate to find optimal number of boosting steps
-cv_res <- cv.CoxBoost(
-  time      = train_time,
-  status    = train_is_dead,
-  x         = X_train_selected_std,
-  maxstepno = 100,
-  K         = 10,
-  penalty   = penalty_val,
-  unpen.index = NULL
-)
+# Define a grid of penalty values to try
+penalty_grid <- seq(from = 0, to = 50, by = 5)
+max_steps <- 100
 
-# extract optimal steps
-optimal_steps <- cv_res$optimal.step
-message("[INFO]: Optimal boosting steps = ", optimal_steps)
-message("[INFO]: Fitting model")
-# Fit final CoxBoost model with the same penalty
+# Store results
+tuning_results <- data.frame(penalty = numeric(), 
+                             optimal_steps = numeric(), 
+                             c_index = numeric(),
+                             loglik = numeric(),
+                             stringsAsFactors = FALSE)
+
+# Perform grid search
+for (penalty_val in penalty_grid) {
+  message("[INFO]: Testing penalty value: ", penalty_val)
+  
+  # Cross validate to find optimal number of boosting steps for this penalty
+  cv_res <- cv.CoxBoost(
+    time      = train_time,
+    status    = train_is_dead,
+    x         = X_train_selected_std,
+    maxstepno = max_steps,
+    K         = 5,
+    penalty   = penalty_val,
+    unpen.index = NULL
+  )
+  
+  # extract optimal steps
+  optimal_steps <- cv_res$optimal.step
+  
+  message("[INFO]: Penalty ", penalty_val, " - Optimal boosting steps = ", optimal_steps)
+  
+  # Get CV likelihood based on the CV result (with check for NULL or missing)
+  cv_loglik <- if(is.null(cv_res$cvlp) || length(cv_res$cvlp) == 0) NA else cv_res$cvlp
+  
+  # Calculate C-index for this model configuration
+  temp_model <- CoxBoost(
+    time      = train_time,
+    status    = train_is_dead,
+    x         = X_train_selected_std,
+    stepno    = optimal_steps,
+    penalty   = penalty_val,
+    unpen.index = NULL
+  )
+  
+  # Create validation set
+  val_idx <- sample(length(train_time), round(length(train_time) * 0.2))
+  val_preds <- predict(temp_model, 
+                       newdata = X_train_selected_std[val_idx,], 
+                       type = "lp", 
+                       at.step = optimal_steps)
+  
+  # Calculate C-index with error handling
+  c_index_val <- tryCatch({
+    rcorr.cens(-val_preds, Surv(train_time[val_idx], train_is_dead[val_idx]))[1]
+  }, error = function(e) {
+    message("[WARNING]: Could not calculate C-index: ", e$message)
+    return(NA)
+  })
+  
+  # Store results with error handling for all variables
+  tuning_results <- rbind(tuning_results, 
+                          data.frame(penalty = penalty_val, 
+                                     optimal_steps = optimal_steps, 
+                                     c_index = c_index_val,
+                                     loglik = cv_loglik,
+                                     stringsAsFactors = FALSE))
+  
+  if(!is.na(c_index_val)) {
+    message("[INFO]: Penalty ", penalty_val, " validation C-index: ", round(c_index_val, 4))
+  } else {
+    message("[INFO]: Penalty ", penalty_val, " - Could not calculate validation C-index")
+  }
+}
+
+message("[INFO]: Hyperparameter tuning completed.")
+print(tuning_results)
+
+# Find best hyperparameters
+best_params <- tuning_results[which.max(tuning_results$c_index), ]
+message("[INFO]: Best hyperparameters - Penalty: ", best_params$penalty, 
+        ", Steps: ", best_params$optimal_steps, 
+        ", C-index: ", round(best_params$c_index, 4))
+
+# Use best hyperparameters for final model
+penalty_val <- best_params$penalty
+optimal_steps <- best_params$optimal_steps
+
+message("[INFO]: Fitting final model with best hyperparameters")
+# Fit final CoxBoost model with best hyperparameters
 coxboost_model <- CoxBoost(
   time      = train_time,
   status    = train_is_dead,
@@ -112,7 +187,7 @@ lp_train <- as.vector(
   predict(coxboost_model,
           newdata = X_train_selected_std,
           type    = "lp",
-          at.step = optimal_steps)   # <- returns a vector
+          at.step = optimal_steps)   # returns a vector
 )
 
 # data frame that will be fed to coxph()
@@ -155,6 +230,7 @@ actual_is_dead <- factor(
 
 # Calculate C-index
 c_index <- rcorr.cens(-risk_scores_test, Surv(test_time, test_is_dead))[1]
+message("[INFO]: Final model C-index on test data: ", round(c_index, 4))
 
 # Generate confusion matrix
 cm_caret <- confusionMatrix(
@@ -162,3 +238,4 @@ cm_caret <- confusionMatrix(
   reference = actual_is_dead,
   positive = "High"
 )
+
