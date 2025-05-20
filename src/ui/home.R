@@ -107,8 +107,21 @@ home_tab <- tabItem(tabName = "home",
           class = "col-md-4",
           tags$h4("Key Publications", style = "color: #3c8dbc;"),
           tags$ul(
-            tags$li("Bailey P, et al. (2016). Genomic analyses identify molecular subtypes of pancreatic cancer. Nature."),
-            tags$li("The Cancer Genome Atlas Research Network. (2017). Integrated genomic characterization of pancreatic ductal adenocarcinoma. Cancer Cell.")
+            tags$li(tags$a(
+              href = "https://doi.org/10.1111/cts.13563", 
+              "Posta M, Győrffy B. (2023). Analysis of a large cohort of pancreatic cancer transcriptomic profiles to reveal the strongest prognostic factors. Clin Transl Sci.",
+              target = "_blank"
+            )),
+            tags$li(tags$a(
+              href = "https://doi.org/10.1038/s41598-020-77220-w",
+              "Spooner A, et al. (2020). A comparison of machine learning methods for survival analysis of high-dimensional clinical data for dementia prediction. Sci Rep.",
+              target = "_blank"
+            )),
+            tags$li(tags$a(
+              href = "https://doi.org/10.1371/journal.pone.0031507",
+              "Zhang G, et al. (2012). DPEP1 inhibits tumor cell invasiveness, enhances chemosensitivity and predicts clinical outcome in pancreatic ductal adenocarcinoma. PLoS One.",
+              target = "_blank"
+            ))
           )
         ),
         tags$div(
@@ -222,8 +235,8 @@ home_tab <- tabItem(tabName = "home",
       ),
       tags$div(
         class = "text-center",
-        tags$p(tags$em("Biomed 8 - Biomedical Informatics Team"), style = "margin-top: 10px;"),
-        tags$p(tags$strong("DATA3888 Project"), style = "margin-top: 5px;")
+        tags$p(tags$em("Biomed 8 - DATA3888"), style = "margin-top: 10px;"),
+        tags$p(tags$strong("University of Sydney"), style = "margin-top: 5px;")
       )
     )
   )
