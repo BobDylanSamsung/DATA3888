@@ -82,7 +82,7 @@ test_is_dead <- test_df$is_dead
 penalty_val <- 4
 
 message("[INFO]: Calculating optimal boosting steps")
-# Cross‐validate to find optimal number of boosting steps
+# Cross validate to find optimal number of boosting steps
 cv_res <- cv.CoxBoost(
   time      = train_time,
   status    = train_is_dead,
@@ -122,7 +122,7 @@ df_train <- data.frame(
   lp     = lp_train       
 )
 
-# “null” Cox model 
+# "null" Cox model 
 coxph_base <- coxph(
   Surv(time, status) ~ offset(lp),   
   data   = df_train,

@@ -1,7 +1,4 @@
 attach_model_outputs <- function(output) {
-  
-  # Main function split into logical sub-functions for better organization
-  
   # Calculate Brier score and IBS
   brier_results <- calculate_brier_score()
   
@@ -13,11 +10,12 @@ attach_model_outputs <- function(output) {
   surv_fit <- survfit(Surv(time, status) ~ risk_group, data = km_data)
   surv_diff <- survdiff(Surv(time, status) ~ risk_group, data = km_data)
   
-  # Render survival plots and tables
   render_survival_plots(output, km_data, surv_fit, surv_diff)
   
-  # Render model performance plots
   render_performance_plots(output, brier_results$brier_df)
+  render_feature_importance_plot(output)
+  render_calibration_plot(output)
+  render_feature_selection_plots(output)
 }
 
 # Helper function to calculate Brier score
@@ -259,4 +257,204 @@ create_empty_plot <- function(message) {
   ggplot() + 
     annotate("text", x = .5, y = .5, label = message) +
     theme_void()
+}
+
+# Add feature importance plot function
+render_feature_importance_plot <- function(output) {
+  output$feature_importance_plot <- renderPlot({
+    # Extract coefficients from the CoxBoost model
+    coefs <- coef(coxboost_model)[selected_features]
+    
+    # Convert to data frame for plotting
+    coef_df <- data.frame(
+      feature = selected_features,
+      coefficient = coefs,
+      stringsAsFactors = FALSE
+    ) %>%
+      # Map feature names to gene symbols when possible
+      mutate(
+        # Look up original gene ID from the safe name
+        original_id = lookup$raw[match(feature, lookup$safe)],
+        # Get full gene information
+        gene_info = GSE28735$featureData$gene_assignment[match(original_id, rownames(GSE28735$featureData))],
+        # Extract gene symbol
+        gene_symbol = sapply(gene_info, extract_gene_symbol, USE.NAMES = FALSE),
+        # Create display label
+        display_name = ifelse(!is.na(gene_symbol), 
+                              paste0(gene_symbol, " (", feature, ")"), 
+                              feature),
+        # Set impact color
+        impact = ifelse(coefficient > 0, "Risk (Worse Survival)", "Protective (Better Survival)"),
+        # Sort by absolute value for plotting
+        abs_coef = abs(coefficient)
+      ) %>%
+      arrange(desc(abs_coef))
+    
+    # Create horizontal bar plot
+    ggplot(coef_df, aes(x = reorder(display_name, abs_coef), y = coefficient, fill = impact)) +
+      geom_bar(stat = "identity") +
+      scale_fill_manual(values = c("Protective (Better Survival)" = "#2E9FDF", 
+                                   "Risk (Worse Survival)" = "#E7B800")) +
+      coord_flip() +
+      labs(
+        title = "Feature Importance in CoxBoost Survival Model",
+        subtitle = "Features sorted by absolute effect size",
+        x = "",
+        y = "Coefficient (Effect on Survival)",
+        fill = "Impact"
+      ) +
+      theme_bw() +
+      theme(
+        legend.position = "bottom",
+        axis.text.y = element_text(size = 10),
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12)
+      )
+  })
+}
+
+render_calibration_plot <- function(output) {
+  output$calibration_plot <- renderPlot({
+    time_point <- 6  
+    
+    # Get predicted survival probabilities at the chosen time point
+    time_index <- max(which(coxboost_model$bh_time <= time_point), 1)
+    
+    # Calculate baseline survival at that time
+    baseline_survival <- exp(-coxboost_model$bh_hazard[time_index])
+    
+    # Calculate predicted survival probabilities for test set
+    pred_survival <- baseline_survival^exp(risk_scores_test)
+    
+    # Create a dataframe with predictions and actual outcomes
+    calib_data <- data.frame(
+      predicted = pred_survival,
+      time = test_time,
+      status = test_is_dead
+    )
+    
+    # Create risk groups by quantiles 
+    num_groups <- 2
+    calib_data$risk_group <- cut(calib_data$predicted, 
+                                 breaks = quantile(calib_data$predicted, probs = seq(0, 1, length.out = num_groups + 1)),
+                                 labels = 1:num_groups, include.lowest = TRUE)
+    
+    # Calculate observed survival in each group using Kaplan-Meier
+    observed_survival <- data.frame()
+    predicted_survival <- data.frame()
+    
+    for (group in levels(calib_data$risk_group)) {
+      group_data <- calib_data[calib_data$risk_group == group, ]
+      
+      # Skip groups with too few samples
+      if (nrow(group_data) < 5) next
+      
+      # Calculate average predicted survival probability for this group
+      avg_pred <- mean(group_data$predicted)
+      
+      # Calculate observed survival at time_point using Kaplan-Meier
+      km_fit <- survfit(Surv(time, status) ~ 1, data = group_data)
+      
+      # Extract survival at time_point
+      surv_at_time <- summary(km_fit, times = time_point)
+      
+      # If we have data for this time point
+      if (length(surv_at_time$surv) > 0) {
+        observed <- surv_at_time$surv
+        obs_lower <- surv_at_time$lower
+        obs_upper <- surv_at_time$upper
+        
+        # Add to results
+        observed_survival <- rbind(observed_survival, 
+                                   data.frame(
+                                     group = as.numeric(group),
+                                     observed = observed,
+                                     lower = obs_lower,
+                                     upper = obs_upper,
+                                     n = nrow(group_data)
+                                   ))
+        
+        predicted_survival <- rbind(predicted_survival, 
+                                    data.frame(
+                                      group = as.numeric(group),
+                                      predicted = avg_pred,
+                                      n = nrow(group_data)
+                                    ))
+      }
+    }
+    
+    # Merge observed and predicted data
+    if (nrow(observed_survival) > 0 && nrow(predicted_survival) > 0) {
+      calib_plot_data <- merge(observed_survival, predicted_survival, by = "group")
+      
+      # Create the calibration plot
+      ggplot(calib_plot_data, aes(x = predicted, y = observed)) +
+        geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+        geom_point(aes(size = n.x), color = "#2E9FDF", alpha = 0.8) +
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.01, color = "#2E9FDF") +
+        scale_size_continuous(name = "Sample size", range = c(3, 10)) +
+        labs(
+          title = paste0(time_point, "-Month Survival Calibration"),
+          subtitle = "Model calibration across different risk groups",
+          x = "Predicted survival probability", 
+          y = "Observed survival probability"
+        ) +
+        coord_equal() +
+        xlim(0, 1) + 
+        ylim(0, 1) +
+        theme_bw() +
+        theme(
+          plot.title = element_text(size = 16, face = "bold"),
+          plot.subtitle = element_text(size = 12),
+          legend.position = "bottom"
+        )
+    } else {
+      # If we don't have data for the calibration plot
+      create_empty_plot("Insufficient follow-up data for calibration plot")
+    }
+  })
+}
+
+render_feature_selection_plots <- function(output) {
+  # Top Features Plot
+  output$min_depth_plot <- renderPlot({
+    # Get pre-computed data from reactive
+    tryCatch({
+      importance_df <- feature_data()
+      
+      # Filter to show only selected features and top unselected features
+      selected_features_df <- importance_df[importance_df$selected, ]
+      unselected_top_df <- importance_df[!importance_df$selected, ]
+      unselected_top_df <- unselected_top_df[order(unselected_top_df$importance, decreasing = TRUE), ]
+      unselected_top_df <- head(unselected_top_df, 15)  # Show top 15 unselected features
+      
+      # Combine and sort for display
+      combined_df <- rbind(selected_features_df, unselected_top_df)
+      combined_df <- combined_df[order(combined_df$importance), ]  # Ascending order
+      
+      # Create the plot
+      ggplot(combined_df, aes(x = reorder(display_name, importance), y = importance, fill = selected)) +
+        geom_bar(stat = "identity", width = 0.7) +
+        scale_fill_manual(values = c("FALSE" = "#E7B800", "TRUE" = "#2E9FDF")) +
+        coord_flip() +
+        theme_bw() +
+        labs(
+          title = "Selected Features and Top Alternatives",
+          subtitle = "Features in the final model shown in blue",
+          x = "",
+          y = "Variable Importance",
+          fill = "Selected for Final Model"
+        ) +
+        theme(
+          legend.position = "bottom",
+          plot.title = element_text(size = 16, face = "bold"),
+          plot.subtitle = element_text(size = 12),
+          axis.text.y = element_text(size = 9)
+        )
+    }, error = function(e) {
+      # Handle errors gracefully
+      message("Error in feature selection plot: ", e$message)
+      create_empty_plot("Error loading feature data")
+    })
+  })
 }

@@ -29,8 +29,48 @@ gse$phenoData$Survival_Status <- factor(
 
 pca_all <- prcomp(t(gse$eMat), scale. = TRUE)
 
-# Heatmap Data Preparation - FIX: Increase to 75 genes
+# Heatmap Data Preparation 
 var_genes_eda <- apply(gse$eMat, 1, var)
 top75_genes_eda <- names(sort(var_genes_eda, decreasing = TRUE)[1:75])
 annotation_col_eda <- data.frame(Survival = gse$phenoData$Survival_Status)
 rownames(annotation_col_eda) <- rownames(gse$phenoData)
+
+# Prepare data for survival time distribution
+prepare_survival_time_data <- function() {
+  # Create a dataframe with survival time and status
+  survival_data <- data.frame(
+    SampleID = rownames(gse$phenoData),
+    SurvivalTime = gse$phenoData$months_survived, 
+    Status = factor(
+      ifelse(gse$phenoData$is_dead == 0, "Alive", "Deceased"),
+      levels = c("Alive", "Deceased")
+    )
+  )
+  return(survival_data)
+}
+
+# Prepare data for volcano plot - differential expression between alive/deceased
+prepare_volcano_data <- function() {
+  # Create design matrix
+  design <- model.matrix(~gse$phenoData$is_dead)
+  colnames(design) <- c("Intercept", "Deceased_vs_Alive")
+  
+  # Fit linear model
+  fit <- limma::lmFit(gse$eMat, design)
+  fit <- limma::eBayes(fit)
+  
+  # Get results
+  results <- limma::topTable(fit, coef = "Deceased_vs_Alive", number = Inf)
+  
+  # Add gene names
+  results$GeneID <- rownames(results)
+  
+  # Flag significant genes (adjust threshold as needed)
+  results$Significant <- ifelse(results$adj.P.Val < 0.05, "Yes", "No")
+  results$Label <- ifelse(results$Significant == "Yes" & abs(results$logFC) > 1, results$GeneID, "")
+  
+  return(results)
+}
+
+survival_time_data <- prepare_survival_time_data()
+volcano_data <- prepare_volcano_data()

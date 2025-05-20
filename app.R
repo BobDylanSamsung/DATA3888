@@ -1,7 +1,6 @@
 # Define the path to the environment image
 environment_image_path <- "environment_image.RData"
 source("src/global.R")
-source("src/eda.R")
 # Check if environment image exists
 if (file.exists(environment_image_path)) {
   # Load the environment image if it exists

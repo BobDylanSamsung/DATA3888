@@ -103,6 +103,42 @@ model_tab <- tabItem(
          values indicating better calibration. This plot helps assess how well the predicted 
          probabilities match actual outcomes over the follow-up period. Values below 0.25 
          generally indicate good predictive accuracy.")
+    ),
+    box(
+      title = "Feature Importance",
+      status = "success",
+      solidHeader = TRUE,
+      width = 6,
+      plotOutput("feature_importance_plot", height = "500px"),
+      p("This plot shows the relative importance of each gene in the final model. 
+       Features are sorted by their absolute effect size. Blue bars indicate genes associated with 
+       improved survival (protective), while red bars show genes associated with worse survival (risk). 
+       Longer bars represent stronger effects on patient prognosis.")
+    )
+  ),
+  fluidRow(
+    box(
+      title = "Model Calibration",
+      status = "primary",
+      solidHeader = TRUE,
+      width = 12,
+      plotOutput("calibration_plot", height = "450px"),
+      p("This calibration plot assesses how well the predicted survival probabilities match the observed outcomes. 
+       Each point represents a group of patients with similar predicted risk. 
+       Points close to the diagonal line indicate good calibration. 
+       Above the line means the model underestimates risk, below means it overestimates risk.")
+    )
+  ),
+  fluidRow(
+    box(
+      title = "Feature Selection: Minimum Depth Distribution",
+      status = "info",
+      solidHeader = TRUE,
+      width = 12,
+      plotOutput("min_depth_plot", height = "500px"),
+      p("This plot shows how close to the root each feature appears in the Random Survival Forest trees. 
+       Features with smaller minimum depth (left side) are considered more important for prediction.
+       The vertical red line indicates the threshold for feature selection.")
     )
   )
 )

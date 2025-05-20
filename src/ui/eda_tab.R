@@ -101,7 +101,37 @@ eda_tab <- tabItem(
            )
     )
   ),
-  
+  # -----------------------------------------------------------------
+  # 5. Survival Analysis Visualizations
+  # -----------------------------------------------------------------
+  fluidRow(
+    # Survival Time Distribution - left side
+    column(width = 6,
+           box(
+             title = "Survival Time Distribution",
+             status = "info",
+             solidHeader = TRUE,
+             width = NULL,
+             plotOutput("survival_time_plot", height = "400px"),
+             p("Distribution of survival times (in days), stratified by patient outcome (alive vs. deceased).
+             Histograms show the count distribution while the curves show density estimation.")
+           )
+    ),
+    
+    # Volcano Plot - right side
+    column(width = 6,
+           box(
+             title = "Differential Expression Analysis",
+             status = "primary",
+             solidHeader = TRUE,
+             width = NULL,
+             plotOutput("volcano_plot", height = "400px"),
+             p("Volcano plot showing gene expression differences between alive and deceased patients.
+             X-axis: log2 fold change, Y-axis: statistical significance.
+             Red points indicate statistically significant genes.")
+           )
+    )
+  ),
   # Add information box at the bottom
   fluidRow(
     box(
