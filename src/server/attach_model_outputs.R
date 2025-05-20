@@ -312,3 +312,105 @@ render_feature_importance_plot <- function(output) {
       )
   })
 }
+
+render_calibration_plot <- function(output) {
+  output$calibration_plot <- renderPlot({
+    time_point <- 6  
+    
+    # Get predicted survival probabilities at the chosen time point
+    time_index <- max(which(coxboost_model$bh_time <= time_point), 1)
+    
+    # Calculate baseline survival at that time
+    baseline_survival <- exp(-coxboost_model$bh_hazard[time_index])
+    
+    # Calculate predicted survival probabilities for test set
+    pred_survival <- baseline_survival^exp(risk_scores_test)
+    
+    # Create a dataframe with predictions and actual outcomes
+    calib_data <- data.frame(
+      predicted = pred_survival,
+      time = test_time,
+      status = test_is_dead
+    )
+    
+    # Create risk groups by quantiles 
+    num_groups <- 2
+    calib_data$risk_group <- cut(calib_data$predicted, 
+                                 breaks = quantile(calib_data$predicted, probs = seq(0, 1, length.out = num_groups + 1)),
+                                 labels = 1:num_groups, include.lowest = TRUE)
+    
+    # Calculate observed survival in each group using Kaplan-Meier
+    observed_survival <- data.frame()
+    predicted_survival <- data.frame()
+    
+    for (group in levels(calib_data$risk_group)) {
+      group_data <- calib_data[calib_data$risk_group == group, ]
+      
+      # Skip groups with too few samples
+      if (nrow(group_data) < 5) next
+      
+      # Calculate average predicted survival probability for this group
+      avg_pred <- mean(group_data$predicted)
+      
+      # Calculate observed survival at time_point using Kaplan-Meier
+      km_fit <- survfit(Surv(time, status) ~ 1, data = group_data)
+      
+      # Extract survival at time_point
+      surv_at_time <- summary(km_fit, times = time_point)
+      
+      # If we have data for this time point
+      if (length(surv_at_time$surv) > 0) {
+        observed <- surv_at_time$surv
+        obs_lower <- surv_at_time$lower
+        obs_upper <- surv_at_time$upper
+        
+        # Add to results
+        observed_survival <- rbind(observed_survival, 
+                                   data.frame(
+                                     group = as.numeric(group),
+                                     observed = observed,
+                                     lower = obs_lower,
+                                     upper = obs_upper,
+                                     n = nrow(group_data)
+                                   ))
+        
+        predicted_survival <- rbind(predicted_survival, 
+                                    data.frame(
+                                      group = as.numeric(group),
+                                      predicted = avg_pred,
+                                      n = nrow(group_data)
+                                    ))
+      }
+    }
+    
+    # Merge observed and predicted data
+    if (nrow(observed_survival) > 0 && nrow(predicted_survival) > 0) {
+      calib_plot_data <- merge(observed_survival, predicted_survival, by = "group")
+      
+      # Create the calibration plot
+      ggplot(calib_plot_data, aes(x = predicted, y = observed)) +
+        geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey50") +
+        geom_point(aes(size = n.x), color = "#2E9FDF", alpha = 0.8) +
+        geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.01, color = "#2E9FDF") +
+        scale_size_continuous(name = "Sample size", range = c(3, 10)) +
+        labs(
+          title = paste0(time_point, "-Month Survival Calibration"),
+          subtitle = "Model calibration across different risk groups",
+          x = "Predicted survival probability", 
+          y = "Observed survival probability"
+        ) +
+        coord_equal() +
+        xlim(0, 1) + 
+        ylim(0, 1) +
+        theme_bw() +
+        theme(
+          plot.title = element_text(size = 16, face = "bold"),
+          plot.subtitle = element_text(size = 12),
+          legend.position = "bottom"
+        )
+    } else {
+      # If we don't have data for the calibration plot
+      create_empty_plot("Insufficient follow-up data for calibration plot")
+    }
+  })
+}
