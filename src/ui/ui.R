@@ -34,19 +34,13 @@ predict_tab <- tabItem(tabName = "predict",
     condition = "output.show_model_plots == false",
     
     # First row: Key metrics in value boxes
+    # First row: Prediction Summary box
     fluidRow(
       box(
         title = "Prediction Summary",
         status = "success",
         solidHeader = TRUE,
         width = 12,
-        fluidRow(
-          column(width = 2, valueBoxOutput("risk_box", width = NULL)),
-          column(width = 2, valueBoxOutput("group_box", width = NULL)),
-          column(width = 2, valueBoxOutput("hr_box", width = NULL)),
-          column(width = 2, valueBoxOutput("median_box", width = NULL)),
-          column(width = 4, valueBoxOutput("percentile_box", width = NULL))
-        ),
         withDefaultSpinner(uiOutput("risk_summary"))
       )
     ),

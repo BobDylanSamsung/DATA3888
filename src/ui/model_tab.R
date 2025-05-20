@@ -16,13 +16,21 @@ model_tab <- tabItem(
   fluidRow(
     # Left column - Value boxes in 2x2 grid
     column(width = 6,
-           fluidRow(
-             column(width = 6, valueBoxOutput("opt_steps_box", width = NULL)),   # optimal boosting steps
-             column(width = 6, valueBoxOutput("c_index_box", width = NULL))      # test-set C-index
-           ),
-           fluidRow(
-             column(width = 6, valueBoxOutput("n_features_box", width = NULL)),  # number of selected genes
-             column(width = 6, valueBoxOutput("ibs_box", width = NULL))          # integrated brier score
+           box(
+             title = "Key Metrics",
+             status = "primary",
+             solidHeader = TRUE,
+             width = NULL,
+             div(
+               fluidRow(
+                 column(width = 6, withDefaultSpinner(valueBoxOutput("opt_steps_box", width = NULL))),   # optimal boosting steps
+                 column(width = 6, withDefaultSpinner(valueBoxOutput("c_index_box", width = NULL)))      # test-set C-index
+               ),
+               fluidRow(
+                 column(width = 6, withDefaultSpinner(valueBoxOutput("n_features_box", width = NULL))),  # number of selected genes
+                 column(width = 6, withDefaultSpinner(valueBoxOutput("ibs_box", width = NULL)))          # integrated brier score
+               )
+             )
            )
     ),
     # Right column - Log-rank test results

@@ -151,31 +151,210 @@ process_prediction <- function(csv_path, model_params) {
   ))
 }
 
+# Function to get survival probability at specific time points
+get_survival_probabilities <- function(surv_curve, time_points) {
+  result <- sapply(time_points, function(t) {
+    # Find the closest time point in our data
+    closest_idx <- which.min(abs(surv_curve$time - t))
+    surv_prob <- surv_curve$survival[closest_idx]
+    return(surv_prob)
+  })
+  
+  # Format as percentages
+  formatted <- paste0(round(result * 100, 1), "%")
+  
+  # Name the results
+  names(formatted) <- paste0(time_points, " months")
+  
+  return(formatted)
+}
+
 # Function to attach prediction outputs to the UI
 attach_prediction_outputs <- function(output, input, pred_results, risk_groups, risk_scores_test, c_index) {
   # Display risk summary
+  # Display risk summary (refactored for better visual appeal)
   output$risk_summary <- renderUI({
     # Format risk percentile
     percentile_text <- if(pred_results$risk_percentile > 95) {
-      "very high"
+      list(text = "very high", color = "#d9534f")  # Red
     } else if(pred_results$risk_percentile > 75) {
-      "high"
+      list(text = "high", color = "#f0ad4e")  # Orange
     } else if(pred_results$risk_percentile > 50) {
-      "above average"
+      list(text = "above average", color = "#5bc0de")  # Light blue
     } else if(pred_results$risk_percentile > 25) {
-      "below average"
+      list(text = "below average", color = "#5cb85c")  # Green
     } else {
-      "low"
+      list(text = "low", color = "#5cb85c")  # Green
     }
     
+    # Define time points for survival estimates
+    time_points <- c(6, 12, 24, 36)
+    
+    # Get probabilities for these time points
+    probs <- get_survival_probabilities(pred_results$surv_curve, time_points)
+    
     div(
-      h3("Patient Risk Profile"),
-      p(paste0("Risk Score: ", round(pred_results$risk_score, 2))),
-      p(paste0("Risk Group: ", pred_results$risk_group)),
-      p(paste0("Hazard Ratio: ", round(pred_results$hr, 2))),
-      p(paste0("Estimated Median Survival: ", round(pred_results$median_surv, 1), " months")),
-      p(HTML(paste0("This patient's risk score is in the <strong>", percentile_text, 
-                    "</strong> range (", round(pred_results$risk_percentile), "th percentile).")))
+      style = "display: flex; flex-wrap: wrap;",
+      
+      # Left panel - Patient Risk Profile
+      div(
+        style = "flex: 1; min-width: 300px; padding-right: 20px;",
+        h3(tags$i(class = "fa fa-user-md", style = "margin-right: 10px;"), "Patient Risk Profile"),
+        
+        # Risk metrics section with styling
+        div(
+          style = "background-color: #f9f9f9; border-radius: 5px; padding: 15px; margin-bottom: 15px;",
+          
+          div(style = "display: flex; margin-bottom: 12px;",
+              div(style = "width: 170px; font-weight: bold;", "Risk Score:"),
+              div(style = "flex: 1;", round(pred_results$risk_score, 2))
+          ),
+          
+          div(style = "display: flex; margin-bottom: 12px;",
+              div(style = "width: 170px; font-weight: bold;", "Risk Group:"),
+              div(style = "flex: 1;", 
+                  tags$span(
+                    style = paste0("font-weight: bold; color: ", 
+                                   ifelse(pred_results$risk_group == "High", "#d9534f", "#5cb85c")),
+                    pred_results$risk_group
+                  )
+              )
+          ),
+          
+          div(style = "display: flex; margin-bottom: 12px;",
+              div(style = "width: 170px; font-weight: bold;", "Hazard Ratio:"),
+              div(style = "flex: 1;", round(pred_results$hr, 2))
+          ),
+          
+          div(style = "display: flex; margin-bottom: 12px;",
+              div(style = "width: 170px; font-weight: bold;", "Estimated Median Survival:"),
+              div(style = "flex: 1;", paste0(round(pred_results$median_surv, 1), " months"))
+          ),
+          
+          # Percentile indicator with custom styling
+          hr(),
+          div(
+            style = "margin-top: 10px;",
+            p(
+              "This patient's risk score is in the ",
+              tags$span(
+                style = paste0("font-weight: bold; color: ", percentile_text$color),
+                percentile_text$text
+              ),
+              " range (",
+              tags$span(style = "font-weight: bold", paste0(round(pred_results$risk_percentile), "th")),
+              " percentile)."
+            ),
+            
+            # Add a visual percentile bar
+            div(
+              style = "height: 8px; background-color: #e9ecef; border-radius: 4px; margin-top: 10px;",
+              div(
+                style = paste0(
+                  "width: ", round(pred_results$risk_percentile), "%; ",
+                  "height: 100%; ",
+                  "background-color: ", percentile_text$color, "; ",
+                  "border-radius: 4px;"
+                )
+              )
+            ),
+            div(
+              style = "display: flex; justify-content: space-between; font-size: 0.8em; color: #6c757d; margin-top: 3px;",
+              div("Lower Risk"),
+              div("Higher Risk")
+            )
+          )
+        )
+      ),
+      
+      # Right panel - Survival Probabilities
+      div(
+        style = "flex: 1; min-width: 300px;",
+        h3(tags$i(class = "fa fa-chart-line", style = "margin-right: 10px;"), "Survival Probability Estimates"),
+        
+        # Create an HTML table with styling
+        div(
+          style = "background-color: #f9f9f9; border-radius: 5px; padding: 15px;",
+          tags$table(
+            class = "table table-hover",
+            style = "margin-bottom: 0;",
+            tags$thead(
+              tags$tr(
+                tags$th(style = "border-top: none;", "Time Point"),
+                tags$th(style = "border-top: none; text-align: right;", "Survival Probability")
+              )
+            ),
+            tags$tbody(
+              lapply(seq_along(probs), function(i) {
+                prob_value <- as.numeric(sub("%", "", probs[i])) / 100
+                
+                # Define color based on probability value
+                color <- if(prob_value >= 0.7) {
+                  "#5cb85c"  # Green for high probability
+                } else if(prob_value >= 0.4) {
+                  "#f0ad4e"  # Orange for medium
+                } else {
+                  "#d9534f"  # Red for low probability
+                }
+                
+                tags$tr(
+                  tags$td(names(probs)[i]),
+                  tags$td(
+                    style = "text-align: right;",
+                    div(
+                      style = "display: flex; align-items: center; justify-content: flex-end;",
+                      div(
+                        style = paste0(
+                          "width: ", round(prob_value * 100), "%; ",
+                          "height: 8px; ",
+                          "background-color: ", color, "; ",
+                          "border-radius: 4px; ",
+                          "margin-right: 10px;"
+                        )
+                      ),
+                      tags$span(
+                        style = paste0("font-weight: bold; color: ", color),
+                        probs[i]
+                      )
+                    )
+                  )
+                )
+              })
+            )
+          )
+        )
+      )
+    )
+  })
+  
+  # Add survival probability table
+  output$survival_table <- renderUI({
+    # Define time points
+    time_points <- c(6, 12, 24, 36)
+    
+    # Get probabilities for these time points
+    probs <- get_survival_probabilities(pred_results$surv_curve, time_points)
+    
+    # Create an HTML table
+    tagList(
+      h4("Survival Probability Estimates"),
+      tags$table(
+        class = "table table-bordered table-striped",
+        tags$thead(
+          tags$tr(
+            tags$th("Time Point"),
+            tags$th("Survival Probability")
+          )
+        ),
+        tags$tbody(
+          lapply(seq_along(probs), function(i) {
+            tags$tr(
+              tags$td(names(probs)[i]),
+              tags$td(probs[i])
+            )
+          })
+        )
+      )
     )
   })
   
@@ -419,6 +598,7 @@ clear_prediction_outputs <- function(output, error_message = NULL) {
   output$time_slider_ui <- renderUI({ NULL })
   output$survival_probability <- renderText({ NULL })
   output$radar_chart <- renderPlot({ NULL })
+  output$survival_table <- renderUI({ NULL })
   
   if (!is.null(error_message)) {
     output$error_message <- renderUI({
