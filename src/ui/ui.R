@@ -85,6 +85,14 @@ predict_tab <- tabItem(tabName = "predict",
         width = 6,
         withDefaultSpinner(DT::DTOutput("gene_table")),
         HTML("<p><i>Positive contribution values indicate higher risk, negative values indicate protective effect.</i></p>")
+      ),
+      box(
+        title = "Gene Expression Radar Chart",
+        status = "info",
+        solidHeader = TRUE,
+        width = 6,
+        withDefaultSpinner(plotOutput("radar_chart", height = 400)),
+        HTML("<p>This radar chart shows how the patient's gene expression levels compare to the population average for the most influential genes. The population average forms a perfect octagon because the expression values are standardized, with mean=0 for the population. Deviations from this octagon indicate where this patient's expression differs from average.</p>")
       )
     ),
   )

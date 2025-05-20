@@ -238,8 +238,33 @@ attach_prediction_outputs <- function(output, input, pred_results, risk_groups, 
   
   # Top genes table
   output$gene_table <- DT::renderDT({
+    # Get gene contributions
     contrib_table <- pred_results$gene_contributions[, c("Gene", "Coefficient", "Expression", "Contribution")]
-    colnames(contrib_table) <- c("Gene", "Coefficient", "Standardized Expression", "Contribution to Risk")
+    
+    # Add gene symbols column using similar approach as in feature_importance_plot
+    contrib_table$Gene_Symbol <- sapply(contrib_table$Gene, function(gene_id) {
+      # Look up original gene ID (it's already in the Gene column, but keeping the code pattern for consistency)
+      original_id <- gene_id
+      
+      # Get full gene information (assumes GSE28735 is available in this scope)
+      gene_info <- GSE28735$featureData$gene_assignment[match(original_id, rownames(GSE28735$featureData))]
+      
+      # Extract gene symbol
+      gene_symbol <- extract_gene_symbol(gene_info)
+      
+      # Return NA or placeholder if no symbol found
+      if(is.na(gene_symbol) || gene_symbol == "") {
+        return(NA)
+      } else {
+        return(gene_symbol)
+      }
+    })
+    
+    # Reorder columns to put Gene_Symbol first, followed by Gene (now Gene ID)
+    contrib_table <- contrib_table[, c("Gene_Symbol", "Gene", "Coefficient", "Expression", "Contribution")]
+    
+    # Rename columns
+    colnames(contrib_table) <- c("Gene Symbol", "Gene ID", "Coefficient", "Standardized Expression", "Contribution to Risk")
     
     # Format the table
     datatable(
@@ -254,6 +279,10 @@ attach_prediction_outputs <- function(output, input, pred_results, risk_groups, 
         backgroundSize = '100% 90%',
         backgroundRepeat = 'no-repeat',
         backgroundPosition = 'center'
+      ) %>%
+      formatStyle(
+        'Gene Symbol',
+        fontWeight = 'bold'  # Make gene symbols bold for emphasis
       )
   })
   
@@ -280,6 +309,103 @@ attach_prediction_outputs <- function(output, input, pred_results, risk_groups, 
             legend.position = "bottom")
   })
   
+  # Add radar chart for gene expression comparison
+  output$radar_chart <- renderPlot({
+    # Get all genes with non-zero coefficients
+    nonzero_coef_genes <- pred_results$gene_contributions %>% 
+      filter(Coefficient != 0) %>%
+      pull(Safe_Name)
+    
+    # Select the genes to display - prioritize non-zero coefficient genes
+    if(length(nonzero_coef_genes) >= 8) {
+      # If we have 8+ nonzero genes, use those
+      genes_to_use <- nonzero_coef_genes[1:8]
+    } else {
+      # Otherwise use all nonzero genes plus top contributing genes to reach 8
+      remaining_genes <- setdiff(pred_results$gene_contributions$Safe_Name, nonzero_coef_genes)
+      remaining_needed <- 8 - length(nonzero_coef_genes)
+      genes_to_use <- c(nonzero_coef_genes, head(remaining_genes, remaining_needed))
+    }
+    
+    # Get the data for selected genes
+    selected_genes_data <- pred_results$gene_contributions %>%
+      filter(Safe_Name %in% genes_to_use)
+    
+    # Extract gene IDs and standardized expression values
+    genes <- selected_genes_data$Safe_Name
+    patient_expr <- selected_genes_data$Expression
+    
+    # Population average is 0 for standardized data
+    pop_avg <- rep(0, length(genes))
+    
+    # Get min and max for scaling
+    min_expr <- min(c(patient_expr, pop_avg)) - 0.5
+    max_expr <- max(c(patient_expr, pop_avg)) + 0.5
+    
+    # Get gene symbols for labels
+    gene_symbols <- sapply(genes, function(feature) {
+      # Look up original gene ID from the safe name
+      original_id <- lookup$raw[match(feature, lookup$safe)]
+      
+      # Get full gene information
+      gene_info <- GSE28735$featureData$gene_assignment[match(original_id, rownames(GSE28735$featureData))]
+      
+      # Extract gene symbol
+      gene_symbol <- extract_gene_symbol(gene_info)
+      
+      # Return gene symbol or feature name if symbol not available
+      ifelse(!is.na(gene_symbol) && gene_symbol != "", gene_symbol, feature)
+    })
+    
+    # Create dataframe for radar chart
+    radar_data <- data.frame(
+      # First row is max values, second row is min values
+      rbind(
+        rep(max_expr, length(genes)),  # Max values
+        rep(min_expr, length(genes)),  # Min values
+        pop_avg,                       # Population average (0 for standardized data)
+        patient_expr                   # Patient values
+      )
+    )
+    
+    # Set column names using gene symbols
+    colnames(radar_data) <- gene_symbols
+    
+    # Set row names for clarity
+    rownames(radar_data) <- c("Max", "Min", "Population_Average", "Patient")
+    
+    # Create radar chart using fmsb package
+    library(fmsb)
+    
+    # Set up the plot
+    par(mar = c(2, 2, 3, 2))
+    
+    # Create radar chart
+    radarchart(
+      radar_data,
+      pfcol = c(NA, rgb(0, 0.6, 0.8, 0.3)),     # Population average area color
+      pcol = c(1, 1, rgb(0, 0.6, 0.8), "red"),  # Line colors
+      plwd = c(1, 1, 3, 3),                      # Line widths
+      plty = c(1, 1, 1, 1),                      # Line types
+      cglcol = "grey",                           # Grid color
+      cglty = 1,                                 # Grid line type
+      axislabcol = "grey30",                     # Axis label color
+      caxislabels = seq(round(min_expr, 1), round(max_expr, 1), length.out = 5),  # Custom axis labels
+      cglwd = 0.8,                               # Grid line width
+      title = "Gene Expression Relative to Population"
+    )
+    
+    # Add a legend
+    legend(
+      "topright",
+      legend = c("Patient", "Population Average"),
+      col = c("red", rgb(0, 0.6, 0.8)),
+      lwd = 3,
+      cex = 0.8,
+      bty = "n"
+    )
+  })
+  
   # Clear any previous error message
   output$error_message <- renderUI({ NULL })
 }
@@ -292,6 +418,7 @@ clear_prediction_outputs <- function(output, error_message = NULL) {
   output$risk_distribution <- renderPlot({ NULL })
   output$time_slider_ui <- renderUI({ NULL })
   output$survival_probability <- renderText({ NULL })
+  output$radar_chart <- renderPlot({ NULL })
   
   if (!is.null(error_message)) {
     output$error_message <- renderUI({
