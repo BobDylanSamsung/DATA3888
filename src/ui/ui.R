@@ -124,17 +124,8 @@ predict_tab <- tabItem(tabName = "predict",
        width = 6,
        DT::DTOutput("gene_table"),
        HTML("<p><i>Positive contribution values indicate higher risk, negative values indicate protective effect.</i></p>")
-     ),
-     # Gene contribution visualization
-     box(
-       title = "Gene Contribution Visualization",
-       status = "success",
-       solidHeader = TRUE,
-       width = 6,
-       plotOutput("gene_contributions", height = 400),
-       HTML("<p>This plot shows the top genes contributing to the risk prediction. Red bars increase risk while blue bars decrease risk.</p>")
      )
-   )
+   ),
   )
 )
 
