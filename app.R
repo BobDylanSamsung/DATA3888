@@ -5,7 +5,7 @@ source("src/global.R")
 if (file.exists(environment_image_path)) {
   # Load the environment image if it exists
   message("Loading pre-trained model from saved environment...")
-  #load(environment_image_path)
+  load(environment_image_path)
   message("Environment loaded successfully!")
 } else {
   # Run the full pipeline if environment image doesn't exist
