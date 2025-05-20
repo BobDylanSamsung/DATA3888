@@ -152,7 +152,7 @@ process_prediction <- function(csv_path, model_params) {
 }
 
 # Function to attach prediction outputs to the UI
-attach_prediction_outputs <- function(output, pred_results, risk_groups, risk_scores_test, c_index) {
+attach_prediction_outputs <- function(output, input, pred_results, risk_groups, risk_scores_test, c_index) {
   # Display risk summary
   output$risk_summary <- renderUI({
     # Format risk percentile
@@ -181,18 +181,60 @@ attach_prediction_outputs <- function(output, pred_results, risk_groups, risk_sc
   
   # Plot survival curve
   output$survival_curve <- renderPlot({
+    # Only render the vertical line if the slider value exists
+    req(input$survival_time_slider)
+    
     surv_curve <- pred_results$surv_curve
+    selected_time <- input$survival_time_slider
+    
+    # Find the closest time point in our data
+    closest_time_idx <- which.min(abs(surv_curve$time - selected_time))
+    closest_time <- surv_curve$time[closest_time_idx]
+    selected_prob <- surv_curve$survival[closest_time_idx]
     
     ggplot(surv_curve, aes(x = time, y = survival)) +
       geom_line(color = "steelblue", size = 1.2) +
-      geom_hline(yintercept = 0.5, linetype = "dashed", color = "red") +
-      geom_vline(xintercept = pred_results$median_surv, linetype = "dashed", color = "red") +
+      # Add dashed vertical line at the selected time point
+      geom_vline(xintercept = selected_time, linetype = "dashed", color = "red", size = 1) +
+      # Add horizontal line at the corresponding probability 
+      geom_hline(yintercept = selected_prob, linetype = "dashed", color = "red", size = 1) +
       labs(x = "Time (months)", y = "Survival Probability", 
            title = "Predicted Survival Curve") +
       theme_minimal() +
       theme(plot.title = element_text(hjust = 0.5, face = "bold"),
             axis.title = element_text(face = "bold"))
   })
+  
+  # Create time slider input
+  output$time_slider_ui <- renderUI({
+    surv_curve <- pred_results$surv_curve
+    max_time <- max(surv_curve$time)
+    
+    sliderInput(
+      "survival_time_slider", 
+      "Select time point (months):",
+      min = 0,
+      max = max_time,
+      value = max_time/4,
+      step = 1, 
+      width = "100%"
+    )
+  })
+  
+  # Display survival probability at selected time
+  output$survival_probability <- renderText({
+    req(input$survival_time_slider)
+    surv_curve <- pred_results$surv_curve
+    
+    # Find the closest time point in our data
+    closest_time_idx <- which.min(abs(surv_curve$time - input$survival_time_slider))
+    closest_time <- surv_curve$time[closest_time_idx]
+    surv_prob <- surv_curve$survival[closest_time_idx]
+    
+    paste0("At ", round(closest_time, 1), " months, the estimated survival probability is ", 
+           round(surv_prob * 100, 1), "%\n")
+  })
+  
   
   # Top genes table
   output$gene_table <- DT::renderDT({
@@ -248,6 +290,8 @@ clear_prediction_outputs <- function(output, error_message = NULL) {
   output$survival_curve <- renderPlot({ NULL })
   output$gene_table <- DT::renderDT({ NULL })
   output$risk_distribution <- renderPlot({ NULL })
+  output$time_slider_ui <- renderUI({ NULL })
+  output$survival_probability <- renderText({ NULL })
   
   if (!is.null(error_message)) {
     output$error_message <- renderUI({

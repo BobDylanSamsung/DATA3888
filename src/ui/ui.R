@@ -31,60 +31,62 @@ predict_tab <- tabItem(tabName = "predict",
   
   # Only show results after prediction is made
   conditionalPanel(
-   condition = "output.show_model_plots == false",
-   
-   # First row: Key metrics in value boxes
-   fluidRow(
-     box(
-       title = "Prediction Summary",
-       status = "success",
-       solidHeader = TRUE,
-       width = 12,
-       fluidRow(
-         column(width = 2, valueBoxOutput("risk_box", width = NULL)),
-         column(width = 2, valueBoxOutput("group_box", width = NULL)),
-         column(width = 2, valueBoxOutput("hr_box", width = NULL)),
-         column(width = 2, valueBoxOutput("median_box", width = NULL)),
-         column(width = 4, valueBoxOutput("percentile_box", width = NULL))
-       ),
-       uiOutput("risk_summary")
-     )
-   ),
-   
-   # Second row: Survival curve and risk distribution
-   fluidRow(
-     # Survival curve
-     box(
-       title = "Predicted Survival",
-       status = "info",
-       solidHeader = TRUE,
-       width = 6,
-       plotOutput("survival_curve", height = 350),
-       HTML("<p>This curve shows the estimated survival probability over time. The red dashed lines indicate the median survival time.</p>")
-     ),
-     # Risk score histogram
-     box(
-       title = "Risk Score Distribution",
-       status = "primary",
-       solidHeader = TRUE,
-       width = 6,
-       plotOutput("risk_distribution", height = 350),
-       HTML("<p>This histogram shows how this patient's risk score compares to the test cohort. The red line indicates the patient's position.</p>")
-     )
-   ),
-   
-   # Third row: Gene table and gene contributions
-   fluidRow(
-     # Gene table box
-     box(
-       title = "Top Contributing Genes",
-       status = "warning",
-       solidHeader = TRUE,
-       width = 6,
-       DT::DTOutput("gene_table"),
-       HTML("<p><i>Positive contribution values indicate higher risk, negative values indicate protective effect.</i></p>")
-     )
-   ),
+    condition = "output.show_model_plots == false",
+    
+    # First row: Key metrics in value boxes
+    fluidRow(
+      box(
+        title = "Prediction Summary",
+        status = "success",
+        solidHeader = TRUE,
+        width = 12,
+        fluidRow(
+          column(width = 2, valueBoxOutput("risk_box", width = NULL)),
+          column(width = 2, valueBoxOutput("group_box", width = NULL)),
+          column(width = 2, valueBoxOutput("hr_box", width = NULL)),
+          column(width = 2, valueBoxOutput("median_box", width = NULL)),
+          column(width = 4, valueBoxOutput("percentile_box", width = NULL))
+        ),
+        withDefaultSpinner(uiOutput("risk_summary"))
+      )
+    ),
+    
+    # Second row: Survival curve and risk distribution
+    fluidRow(
+      # Survival curve
+      box(
+        title = "Predicted Survival",
+        status = "info",
+        solidHeader = TRUE,
+        width = 6,
+        withDefaultSpinner(plotOutput("survival_curve", height = 350)),
+        uiOutput("time_slider_ui"),
+        htmlOutput("survival_probability"),
+        HTML("<p>This curve shows the estimated survival probability over time. The red dashed lines indicate the median survival time.</p>")
+      ),
+      # Risk score histogram
+      box(
+        title = "Risk Score Distribution",
+        status = "primary",
+        solidHeader = TRUE,
+        width = 6,
+        withDefaultSpinner(plotOutput("risk_distribution", height = 350)),
+        HTML("<p>This histogram shows how this patient's risk score compares to the test cohort. The red line indicates the patient's position.</p>")
+      )
+    ),
+    
+    # Third row: Gene table and gene contributions
+    fluidRow(
+      # Gene table box
+      box(
+        title = "Top Contributing Genes",
+        status = "warning",
+        solidHeader = TRUE,
+        width = 6,
+        withDefaultSpinner(DT::DTOutput("gene_table")),
+        HTML("<p><i>Positive contribution values indicate higher risk, negative values indicate protective effect.</i></p>")
+      )
+    ),
   )
 )
 

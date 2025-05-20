@@ -11,7 +11,7 @@ server <- function(input, output, session) {
   
   # Attach visualizations to output
   attach_eda_outputs(output)
-  attach_model_outputs(output)
+  attach_model_outputs(output, session)
   
   # Initialize prediction outputs
   clear_prediction_outputs(output)
@@ -45,6 +45,7 @@ server <- function(input, output, session) {
         # Attach the prediction outputs to the UI
         attach_prediction_outputs(
           output, 
+          input,
           pred_results, 
           risk_groups,
           risk_scores_test, 

@@ -133,7 +133,7 @@ attach_eda_outputs <- function(output) {
       ) +
       theme_minimal() +
       # Add a second layer with density plot
-      geom_density(aes(x = SurvivalTime, color = Status, y = ..count.. * 5), 
+      geom_density(aes(x = SurvivalTime, color = Status, y = after_stat(count) * 5), 
                    alpha = 0.2) +
       scale_color_manual(values = c("Alive" = "blue", "Deceased" = "red"))
   })

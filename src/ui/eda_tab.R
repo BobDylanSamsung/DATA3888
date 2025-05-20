@@ -26,7 +26,7 @@ eda_tab <- tabItem(
              status = "info",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("expression_histogram", height = "350px"),
+             withDefaultSpinner(plotOutput("expression_histogram", height = "350px")),
              p("This histogram shows the distribution of log2 expression values across all genes and samples.")
            )
     ),
@@ -38,7 +38,7 @@ eda_tab <- tabItem(
              status = "warning",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("expression_per_sample_boxplot", height = "350px"),
+             withDefaultSpinner(plotOutput("expression_per_sample_boxplot", height = "350px")),
              p("Each boxplot shows gene expression distribution per sample. Blue = alive patients, coral = deceased patients.")
            )
     )
@@ -55,7 +55,7 @@ eda_tab <- tabItem(
              status = "success",
              solidHeader = TRUE,
              width = NULL,
-             DT::DTOutput("summary_table"),
+             withDefaultSpinner(DT::DTOutput("summary_table")),
              p("Paginated table of summary statistics for each sample.")
            )
     ),
@@ -67,7 +67,7 @@ eda_tab <- tabItem(
              status = "primary",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("summary_statistics_boxplot", height = "350px"),
+             withDefaultSpinner(plotOutput("summary_statistics_boxplot", height = "350px")),
              p("Distribution of each summary statistic across all samples.")
            )
     )
@@ -84,7 +84,7 @@ eda_tab <- tabItem(
              status = "danger",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("pca_plot", height = "400px"),
+             withDefaultSpinner(plotOutput("pca_plot", height = "400px")),
              p("PCA plot showing sample clustering. Points are colored by survival status: blue = alive, red = deceased.")
            )
     ),
@@ -96,7 +96,7 @@ eda_tab <- tabItem(
              status = "warning",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("variable_genes_heatmap", height = "400px"),
+             withDefaultSpinner(plotOutput("variable_genes_heatmap", height = "400px")),
              p("Heatmap of the 75 most variable genes. Samples are annotated by survival status.")
            )
     )
@@ -112,7 +112,7 @@ eda_tab <- tabItem(
              status = "info",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("survival_time_plot", height = "400px"),
+             withDefaultSpinner(plotOutput("survival_time_plot", height = "400px")),
              p("Distribution of survival times (in days), stratified by patient outcome (alive vs. deceased).
              Histograms show the count distribution while the curves show density estimation.")
            )
@@ -125,7 +125,7 @@ eda_tab <- tabItem(
              status = "primary",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("volcano_plot", height = "400px"),
+             withDefaultSpinner(plotOutput("volcano_plot", height = "400px")),
              p("Volcano plot showing gene expression differences between alive and deceased patients.
              X-axis: log2 fold change, Y-axis: statistical significance.
              Red points indicate statistically significant genes.")

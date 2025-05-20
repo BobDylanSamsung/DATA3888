@@ -3,6 +3,7 @@ library(caret)
 library(CoxBoost)
 library(dplyr)
 library(DT)
+library(future)
 library(GEOquery)
 library(ggplot2)
 library(ggfortify)
@@ -12,6 +13,7 @@ library(Hmisc)
 library(knitr)
 library(limma)
 library(pheatmap)
+library(promises)
 library(randomForestSRC)
 library(pec)
 library(pROC)
@@ -21,6 +23,7 @@ library(riskRegression)
 library(rms)
 library(reshape2)
 library(shiny)
+library(shinycssloaders)
 library(shinydashboard)
 library(survival)
 library(survminer)
@@ -28,6 +31,7 @@ library(tidyverse)
 library(timeROC)
 
 set.seed(3888)
+plan(multisession)
 
 ## ================================================================
 ##  S3 method required by riskRegression::Score 
@@ -91,3 +95,12 @@ feature_data <- reactive({
   
   return(importance_df)
 })
+
+withDefaultSpinner <- function(ui_element) {
+  shinycssloaders::withSpinner(
+    ui_element,
+    type = 8,
+    color = "#2E9FDF",
+    size = 1
+  )
+}

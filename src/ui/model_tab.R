@@ -1,3 +1,13 @@
+# Define wrapper function at the top of your file
+withDefaultSpinner <- function(ui_element) {
+  shinycssloaders::withSpinner(
+    ui_element,
+    type = 8,
+    color = "#2E9FDF",
+    size = 1
+  )
+}
+
 model_tab <- tabItem(
   tabName = "model",
   # -----------------------------------------------------------------
@@ -22,7 +32,7 @@ model_tab <- tabItem(
              status = "info",
              solidHeader = TRUE,
              width = NULL,
-             tableOutput("log_rank_results"),
+             withDefaultSpinner(tableOutput("log_rank_results")),
              p("The log-rank test compares survival distributions between risk groups. 
                 A significant p-value (<0.05) indicates that the model effectively separates patients 
                 into groups with different survival outcomes.")
@@ -40,7 +50,7 @@ model_tab <- tabItem(
              status = "primary",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("km_curve", height = "400px"),
+             withDefaultSpinner(plotOutput("km_curve", height = "400px")),
              p("This plot shows survival probability over time for each risk group. 
                 Separation between curves indicates how well the model stratifies patients 
                 into distinct prognostic groups. Wider separation suggests better risk discrimination.")
@@ -52,7 +62,7 @@ model_tab <- tabItem(
              status = "warning",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("chaz_curve", height = "400px"),
+             withDefaultSpinner(plotOutput("chaz_curve", height = "400px")),
              p("The cumulative hazard plot shows the accumulated risk of the event over time 
                 for each risk group. Steeper slopes indicate higher rates of events, providing 
                 insight into how risk accumulates differently between groups.")
@@ -71,7 +81,7 @@ model_tab <- tabItem(
              status = "primary",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("roc_curve_plot", height = "400px"),
+             withDefaultSpinner(plotOutput("roc_curve_plot", height = "400px")),
              p("The ROC curve shows the tradeoff between sensitivity and specificity at 
                 different classification thresholds. The Area Under the Curve (AUC) measures 
                 overall discriminative ability, with values closer to 1 indicating better 
@@ -85,7 +95,7 @@ model_tab <- tabItem(
              status = "info",
              solidHeader = TRUE,
              width = NULL,
-             plotOutput("time_auc_plot", height = "400px"),
+             withDefaultSpinner(plotOutput("time_auc_plot", height = "400px")),
              p("This plot shows how the model's discriminative ability (AUC) changes over time. 
                 It helps identify when the model performs best and whether its predictive power 
                 remains stable or deteriorates with longer follow-up.")
@@ -98,7 +108,7 @@ model_tab <- tabItem(
       status = "info",
       solidHeader = TRUE,
       width = 6,
-      plotOutput("brier_curve"),
+      withDefaultSpinner(plotOutput("brier_curve")),
       p("The Brier score measures prediction accuracy at different time points, with lower 
          values indicating better calibration. This plot helps assess how well the predicted 
          probabilities match actual outcomes over the follow-up period. Values below 0.25 
@@ -109,7 +119,7 @@ model_tab <- tabItem(
       status = "success",
       solidHeader = TRUE,
       width = 6,
-      plotOutput("feature_importance_plot", height = "500px"),
+      withDefaultSpinner(plotOutput("feature_importance_plot", height = "500px")),
       p("This plot shows the relative importance of each gene in the final model. 
        Features are sorted by their absolute effect size. Blue bars indicate genes associated with 
        improved survival (protective), while red bars show genes associated with worse survival (risk). 
@@ -122,23 +132,11 @@ model_tab <- tabItem(
       status = "primary",
       solidHeader = TRUE,
       width = 12,
-      plotOutput("calibration_plot", height = "450px"),
+      withDefaultSpinner(plotOutput("calibration_plot", height = "450px")),
       p("This calibration plot assesses how well the predicted survival probabilities match the observed outcomes. 
        Each point represents a group of patients with similar predicted risk. 
        Points close to the diagonal line indicate good calibration. 
        Above the line means the model underestimates risk, below means it overestimates risk.")
-    )
-  ),
-  fluidRow(
-    box(
-      title = "Feature Selection: Minimum Depth Distribution",
-      status = "info",
-      solidHeader = TRUE,
-      width = 12,
-      plotOutput("min_depth_plot", height = "500px"),
-      p("This plot shows how close to the root each feature appears in the Random Survival Forest trees. 
-       Features with smaller minimum depth (left side) are considered more important for prediction.
-       The vertical red line indicates the threshold for feature selection.")
     )
   )
 )
