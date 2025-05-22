@@ -78,8 +78,10 @@ train_is_dead <- train_df$is_dead
 test_time <- test_df$time
 test_is_dead <- test_df$is_dead    
 
-# choose a reasonable penalty
-penalty_val <- 4
+# hyperparams from hptune.rmd chosen by min ibs score
+penalty_val <- 15
+stepsize <- 0.3
+
 
 message("[INFO]: Calculating optimal boosting steps")
 # Cross validate to find optimal number of boosting steps
@@ -90,6 +92,7 @@ cv_res <- cv.CoxBoost(
   maxstepno = 100,
   K         = 10,
   penalty   = penalty_val,
+  stepsize.factor = stepsize,
   unpen.index = NULL
 )
 
@@ -103,6 +106,7 @@ coxboost_model <- CoxBoost(
   status    = train_is_dead,
   x         = X_train_selected_std,
   stepno    = optimal_steps,
+  stepsize.factor = stepsize,
   penalty   = penalty_val,
   unpen.index = NULL
 )
