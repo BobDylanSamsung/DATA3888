@@ -91,8 +91,8 @@ max_steps <- 100
 # Store results
 tuning_results <- data.frame(penalty = numeric(), 
                              optimal_steps = numeric(), 
-                             c_index = numeric(),
-                             loglik = numeric(),
+                             cv_cindex = numeric(),
+                             cv_loglik = numeric(),
                              stringsAsFactors = FALSE)
 
 # Perform grid search
@@ -110,62 +110,33 @@ for (penalty_val in penalty_grid) {
     unpen.index = NULL
   )
   
-  # extract optimal steps
+  # Extract optimal steps
   optimal_steps <- cv_res$optimal.step
   
-  message("[INFO]: Penalty ", penalty_val, " - Optimal boosting steps = ", optimal_steps)
+  # Get cross-validated log-likelihood at optimal step
+  cv_loglik <- cv_res$mean.logplik[optimal_steps + 1]  # +1 because index starts at 0
   
-  # Get CV likelihood based on the CV result (with check for NULL or missing)
-  cv_loglik <- if(is.null(cv_res$cvlp) || length(cv_res$cvlp) == 0) NA else cv_res$cvlp
+  message("[INFO]: Penalty ", penalty_val, 
+          " - Optimal boosting steps = ", optimal_steps,
+          " - CV log-likelihood = ", round(cv_loglik, 4))
   
-  # Calculate C-index for this model configuration
-  temp_model <- CoxBoost(
-    time      = train_time,
-    status    = train_is_dead,
-    x         = X_train_selected_std,
-    stepno    = optimal_steps,
-    penalty   = penalty_val,
-    unpen.index = NULL
-  )
-  
-  # Create validation set
-  val_idx <- sample(length(train_time), round(length(train_time) * 0.2))
-  val_preds <- predict(temp_model, 
-                       newdata = X_train_selected_std[val_idx,], 
-                       type = "lp", 
-                       at.step = optimal_steps)
-  
-  # Calculate C-index with error handling
-  c_index_val <- tryCatch({
-    rcorr.cens(-val_preds, Surv(train_time[val_idx], train_is_dead[val_idx]))[1]
-  }, error = function(e) {
-    message("[WARNING]: Could not calculate C-index: ", e$message)
-    return(NA)
-  })
-  
-  # Store results with error handling for all variables
+  # Store results
   tuning_results <- rbind(tuning_results, 
                           data.frame(penalty = penalty_val, 
                                      optimal_steps = optimal_steps, 
-                                     c_index = c_index_val,
-                                     loglik = cv_loglik,
+                                     cv_loglik = cv_loglik,
                                      stringsAsFactors = FALSE))
-  
-  if(!is.na(c_index_val)) {
-    message("[INFO]: Penalty ", penalty_val, " validation C-index: ", round(c_index_val, 4))
-  } else {
-    message("[INFO]: Penalty ", penalty_val, " - Could not calculate validation C-index")
-  }
 }
 
 message("[INFO]: Hyperparameter tuning completed.")
 print(tuning_results)
 
-# Find best hyperparameters
-best_params <- tuning_results[which.max(tuning_results$c_index), ]
+# Find best hyperparameters based on cross-validated log-likelihood
+# Note: Higher log-likelihood (less negative) is better
+best_params <- tuning_results[which.max(tuning_results$cv_loglik), ]
 message("[INFO]: Best hyperparameters - Penalty: ", best_params$penalty, 
         ", Steps: ", best_params$optimal_steps, 
-        ", C-index: ", round(best_params$c_index, 4))
+        ", CV log-likelihood: ", round(best_params$cv_loglik, 4))
 
 # Use best hyperparameters for final model
 penalty_val <- best_params$penalty

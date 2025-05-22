@@ -1,0 +1,465 @@
+```{r setup}
+library(survival)
+library(randomForestSRC)
+library(CoxBoost)
+library(riskRegression)
+library(dplyr)
+library(Hmisc)
+library(caret)
+
+set.seed(3888)
+
+predictRisk.CoxBoost <- function(object, newdata, times, ...) {
+  
+  # make sure the covariate order is identical
+  X <- as.matrix(newdata[, object$xnames, drop = FALSE])
+  
+  # linear predictor for the NEW data
+  lp <- as.vector(predict(object, newdata = X, type = "lp"))
+  
+  # grab the baseline cumulative hazard that we stored in the model;
+  # build a step function so we can evaluate it at arbitrary 'times'
+  H0_step <- stats::stepfun(object$bh_time,
+                            c(0, object$bh_hazard))
+  
+  H0_vec  <- H0_step(times)          # baseline cumul. haz. at all eval times
+  
+  # matrix:  nrow = n_obs,  ncol = length(times)
+  surv_mat <- exp(-outer(exp(lp), H0_vec, "*"))
+  
+  risk_mat <- 1 - surv_mat           # Score() expects RISKS
+  return(risk_mat)
+}
+```
+
+```{r data_preparation}
+#########################################################
+## NOTE: MUST RUN load_data.R BEFORE THIS FILE
+#########################################################
+
+# Construct survival object
+surv_obj <- with(gse$phenoData, Surv(as.numeric(months_survived), as.numeric(is_dead)))
+
+# Prepare feature matrix
+X <- t(gse$eMat) %>% as.matrix()
+
+# Create safe column names
+safe_names <- make.names(colnames(X), unique = TRUE)
+colnames(X) <- safe_names
+lookup <- data.frame(
+  safe = safe_names,
+  raw  = rownames(gse$eMat),
+  stringsAsFactors = FALSE
+)
+
+# First split the data into train+validation (80%) and test (20%)
+train_val_idx <- createDataPartition(factor(gse$phenoData$is_dead), p = 0.80, list = FALSE)
+# Then split the train+validation into train (75% of original = 60%) and validation (25% of original = 20%)
+train_idx <- train_val_idx[createDataPartition(factor(gse$phenoData$is_dead[train_val_idx]), p = 0.75, list = FALSE)]
+# Get validation indices
+val_idx <- setdiff(train_val_idx, train_idx)
+# Get test indices
+test_idx <- setdiff(1:nrow(X), train_val_idx)
+
+# Split into training, validation, and testing sets
+X_train <- X[train_idx, ]
+X_val <- X[val_idx, ]
+X_test <- X[test_idx, ]
+
+# Survival objects for each dataset
+train_surv <- surv_obj[train_idx]
+val_surv <- surv_obj[val_idx]
+test_surv <- surv_obj[test_idx]
+
+# Create dataframes for each set
+train_df <- data.frame(
+  time    = as.numeric(gse$phenoData$months_survived[train_idx]),
+  is_dead = as.numeric(gse$phenoData$is_dead[train_idx]),
+  as.data.frame(X_train, check.names = FALSE)
+)
+
+val_df <- data.frame(
+  time    = as.numeric(gse$phenoData$months_survived[val_idx]),
+  is_dead = as.numeric(gse$phenoData$is_dead[val_idx]),
+  as.data.frame(X_val, check.names = FALSE)
+)
+
+test_df <- data.frame(
+  time    = as.numeric(gse$phenoData$months_survived[test_idx]),
+  is_dead = as.numeric(gse$phenoData$is_dead[test_idx]),
+  as.data.frame(X_test, check.names = FALSE)
+)
+```
+
+```{r mdrf_feature_selection}
+# Feature selection with Random Survival Forest
+message("[INFO]: Growing 1000 trees for RSF model...")
+rsf_model <- rfsrc(Surv(time, is_dead) ~ ., data = train_df, 
+                   ntree = 1000, 
+                   importance = TRUE)
+
+# Get variable importance by minimal depth
+var_imp <- var.select(rsf_model, method = "md", verbose = FALSE)
+top_by_md <- var_imp$md.obj$topvars
+
+if (length(top_by_md) == 0) {
+  message("[INFO]: No variables selected by minimal depth. Using VIMP instead...")
+  vimp_sorted <- sort(rsf_model$importance, decreasing = TRUE, na.last = TRUE)
+  top_by_md <- names(vimp_sorted)
+}
+
+n_features_to_select <- 15
+selected_features <- top_by_md[1:min(n_features_to_select, length(top_by_md))]
+
+# Display selected features
+message("[INFO]: Selected features:")
+print(selected_features)
+
+# Save selected features for later use
+saveRDS(selected_features, "selected_features.rds")
+```
+
+```{r data_prep}
+# Load selected features if needed
+if(!exists("selected_features")) {
+  selected_features <- readRDS("selected_features.rds")
+}
+
+# Prepare data for CoxBoost with selected features only
+X_train_selected <- X_train[, selected_features, drop = FALSE]
+X_val_selected <- X_val[, selected_features, drop = FALSE]
+X_test_selected <- X_test[, selected_features, drop = FALSE]
+
+# Standardize the data (using training data statistics for all sets)
+X_train_selected_std <- scale(X_train_selected)
+X_val_selected_std <- scale(X_val_selected, 
+                           center = attr(X_train_selected_std, "scaled:center"),
+                           scale = attr(X_train_selected_std, "scaled:scale"))
+X_test_selected_std <- scale(X_test_selected, 
+                            center = attr(X_train_selected_std, "scaled:center"),
+                            scale = attr(X_train_selected_std, "scaled:scale"))
+
+# Set up variables for CoxBoost
+train_time <- train_df$time
+train_is_dead <- train_df$is_dead
+val_time <- val_df$time
+val_is_dead <- val_df$is_dead
+test_time <- test_df$time
+test_is_dead <- test_df$is_dead
+```
+
+```{r eval_helper}
+# Define a helper function to evaluate CoxBoost model with Brier score
+evaluate_coxboost <- function(penalty_val, optimal_steps, X_train_std, X_eval_std, 
+                              train_time, train_is_dead, eval_time, eval_is_dead, 
+                              selected_features, eval_label = "validation") {
+  # Fit CoxBoost model
+  coxboost_model <- CoxBoost(
+    time = train_time,
+    status = train_is_dead,
+    x = X_train_std,
+    stepno = optimal_steps,
+    penalty = penalty_val,
+    unpen.index = NULL
+  )
+  
+  # Add baseline hazard to model for Brier score calculation
+  lp_train <- as.vector(
+    predict(coxboost_model,
+            newdata = X_train_std,
+            type = "lp",
+            at.step = optimal_steps)
+  )
+  
+  df_train <- data.frame(
+    time = train_time,
+    status = train_is_dead,
+    lp = lp_train       
+  )
+  
+  coxph_base <- coxph(
+    Surv(time, status) ~ offset(lp),   
+    data = df_train,
+    method = "breslow"
+  )
+  
+  bh <- basehaz(coxph_base, centered = FALSE)
+  
+  coxboost_model$bh_time <- bh$time
+  coxboost_model$bh_hazard <- bh$hazard
+  coxboost_model$stepno <- optimal_steps
+  coxboost_model$xnames <- selected_features
+  
+  # Calculate C-index
+  risk_scores_eval <- as.vector(
+    predict(coxboost_model,
+            newdata = X_eval_std,
+            type = "lp",
+            at.step = optimal_steps)
+  )
+  
+  c_index <- rcorr.cens(-risk_scores_eval, Surv(eval_time, eval_is_dead))[1]
+  
+  # Calculate Brier score
+  eval_times <- seq(6, floor(max(eval_time)), by = 6)
+  eval_times <- eval_times[sapply(eval_times, function(t)
+    any(eval_is_dead == 1 & eval_time <= t) && any(eval_time >= t))]
+  
+  eval_score_df <- data.frame(
+    time = eval_time,
+    is_dead = eval_is_dead
+  )
+  
+  # Add feature columns
+  for (feat in selected_features) {
+    eval_score_df[[feat]] <- X_eval_std[, feat]
+  }
+  
+  # Calculate Brier score with error handling
+  score_res <- tryCatch({
+    riskRegression::Score(
+      object = list(CoxBoost = coxboost_model),
+      formula = Surv(time, is_dead) ~ 1,
+      data = eval_score_df,
+      times = eval_times,
+      metrics = "brier",
+      cens.model = "km",
+      split.method = "none",
+      summary = "ibs"
+    )
+  }, error = function(e) {
+    message("Error in Brier score calculation: ", e$message)
+    return(NULL)
+  })
+  
+  # Process results
+  if (is.null(score_res) || length(eval_times) < 2) {
+    ibs_value <- NA_real_
+  } else {
+    ibs_value <- score_res$Brier$score[score_res$Brier$score$model == "CoxBoost" & 
+                                         score_res$Brier$score$times == max(score_res$Brier$score$times), "IBS"]
+  }
+  
+  message("[INFO]: ", eval_label, " set - C-index = ", round(c_index, 4), 
+          " - IBS = ", round(ibs_value, 4))
+  
+  return(list(
+    c_index = c_index,
+    ibs_value = ibs_value,
+    model = coxboost_model
+  ))
+}
+```
+
+```{r hp_tune}
+# Hyperparameter tuning grid for CoxBoost
+message("[INFO]: Starting hyperparameter tuning for CoxBoost...")
+penalty_grid <- seq(from = 0, to = 50, by = 5)
+stepsize_grid <- c(0.1, 0.3, 0.5, 0.7, 1.0) # Try a range of step sizes
+max_steps <- 100 # Maximum number of boosting steps to consider
+
+# Create empty data frame to store tuning results
+tuning_results <- data.frame(
+  penalty = numeric(), 
+  stepsize = numeric(),
+  optimal_steps = numeric(), 
+  logplik = numeric(),
+  val_c_index = numeric(),
+  val_ibs = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Perform grid search over all parameter combinations
+for (penalty_val in penalty_grid) {
+  for (stepsize_val in stepsize_grid) {
+      message("[INFO]: Testing penalty=", penalty_val, 
+              ", stepsize=", stepsize_val)
+      
+      # Cross-validate to find optimal number of boosting steps
+      cv_res <- cv.CoxBoost(
+        time = train_time,
+        status = train_is_dead,
+        x = X_train_selected_std,
+        maxstepno = max_steps,
+        K = 5,  # 5-fold cross-validation
+        penalty = penalty_val,
+        stepsize.factor = stepsize_val,
+        criterion = "pscore",  # Use partial score as criterion
+        unpen.index = NULL
+      )
+      
+      # Get optimal number of boosting steps from CV
+      optimal_steps <- cv_res$optimal.step
+      
+      # Extract the log partial likelihood at optimal steps
+      logplik <- cv_res$mean.logplik[optimal_steps + 1]
+      
+      # Evaluate the model on validation data
+      val_result <- evaluate_coxboost(
+        penalty_val = penalty_val,
+        optimal_steps = optimal_steps,
+        X_train_std = X_train_selected_std,
+        X_eval_std = X_val_selected_std,
+        train_time = train_time,
+        train_is_dead = train_is_dead,
+        eval_time = val_time,
+        eval_is_dead = val_is_dead,
+        selected_features = selected_features,
+        eval_label = "Validation"
+      )
+      
+      # Extract performance metrics
+      c_index_value <- if (!is.null(val_result$c_index)) {
+        as.numeric(val_result$c_index)
+      } else {
+        NA  # Use NA if c_index not available
+      }
+      
+      ibs_value <- if (!is.null(val_result$ibs_value) && !is.null(val_result$ibs_value$IBS)) {
+        as.numeric(val_result$ibs_value$IBS)
+      } else {
+        NA  # Use NA if IBS not available
+      }
+      
+      # Add results to our tuning table
+      new_row <- data.frame(
+        penalty = penalty_val, 
+        stepsize = stepsize_val,
+        optimal_steps = optimal_steps, 
+        logplik = logplik,
+        val_c_index = c_index_value,
+        val_ibs = ibs_value,
+        stringsAsFactors = FALSE
+      )
+      
+      # Append the new results
+      tuning_results <- rbind(tuning_results, new_row)
+      
+      # Log results to console
+      message("[INFO]: Penalty=", penalty_val, 
+            ", Stepsize=", stepsize_val,
+            " - Optimal steps=", optimal_steps,
+            " - logplik=", round(logplik, 4))
+  }
+}
+
+# Find best hyperparameters using validation set C-index
+best_idx <- which.max(tuning_results$val_c_index)
+best_params <- tuning_results[best_idx, ]
+
+view(tuning_results)
+
+message("\n[INFO]: Hyperparameter tuning completed.")
+```
+
+```{r eval}
+# Build models with best hyperparameters for different metrics
+message("[INFO]: Building models with best hyperparameters for different metrics...")
+
+# 1. Best model based on validation C-index
+best_cindex_idx <- which.max(tuning_results$val_c_index)
+best_cindex_penalty <- tuning_results$penalty[best_cindex_idx]
+best_cindex_stepsize <- tuning_results$stepsize[best_cindex_idx]
+best_cindex_steps <- tuning_results$optimal_steps[best_cindex_idx]
+
+message("[INFO]: Best C-index model - Penalty = ", best_cindex_penalty, 
+        ", Stepsize = ", best_cindex_stepsize,
+        ", Steps = ", best_cindex_steps,
+        ", Validation C-index = ", round(tuning_results$val_c_index[best_cindex_idx], 4))
+
+# 2. Best model based on validation IBS (lower is better)
+best_ibs_idx <- which.min(tuning_results$val_ibs)
+best_ibs_penalty <- tuning_results$penalty[best_ibs_idx]
+best_ibs_stepsize <- tuning_results$stepsize[best_ibs_idx]
+best_ibs_steps <- tuning_results$optimal_steps[best_ibs_idx]
+
+message("[INFO]: Best IBS model - Penalty = ", best_ibs_penalty, 
+        ", Stepsize = ", best_ibs_stepsize,
+        ", Steps = ", best_ibs_steps,
+        ", Validation IBS = ", round(tuning_results$val_ibs[best_ibs_idx], 4))
+
+# 3. Best model based on log partial likelihood (higher is better)
+best_logplik_idx <- which.max(tuning_results$logplik)
+best_logplik_penalty <- tuning_results$penalty[best_logplik_idx]
+best_logplik_stepsize <- tuning_results$stepsize[best_logplik_idx]
+best_logplik_steps <- tuning_results$optimal_steps[best_logplik_idx]
+
+message("[INFO]: Best logplik model - Penalty = ", best_logplik_penalty, 
+        ", Stepsize = ", best_logplik_stepsize,
+        ", Steps = ", best_logplik_steps,
+        ", Validation logplik = ", round(tuning_results$logplik[best_logplik_idx], 4))
+
+# Fit and evaluate the three models
+model_results <- list()
+
+# Function to fit and evaluate a model
+fit_and_evaluate <- function(penalty, stepsize, steps, metric_name) {
+  message("\n[INFO]: Fitting and evaluating ", metric_name, " model...")
+  
+  # Fit model
+  model <- CoxBoost(
+    time = train_time,
+    status = train_is_dead,
+    x = X_train_selected_std,
+    stepno = steps,
+    penalty = penalty,
+    stepsize.factor = stepsize,
+    unpen.index = NULL
+  )
+  
+  # Evaluate on test set
+  test_result <- evaluate_coxboost(
+    penalty_val = penalty,
+    optimal_steps = steps,
+    X_train_std = X_train_selected_std,
+    X_eval_std = X_test_selected_std,
+    train_time = train_time,
+    train_is_dead = train_is_dead,
+    eval_time = test_time,
+    eval_is_dead = test_is_dead,
+    selected_features = selected_features,
+    eval_label = "Test"
+  )
+  
+  # Print test set results
+  message("[INFO]: ", metric_name, " model performance on test set:")
+  message("C-index: ", round(test_result$c_index, 4))
+  message("Integrated Brier Score: ", round(test_result$ibs_value$IBS, 4))
+  
+  # Return model and results
+  return(list(model = model, test_result = test_result))
+}
+
+# Fit and evaluate all three models
+model_results$cindex <- fit_and_evaluate(best_cindex_penalty, best_cindex_stepsize, 
+                                        best_cindex_steps, "C-index")
+
+model_results$ibs <- fit_and_evaluate(best_ibs_penalty, best_ibs_stepsize, 
+                                     best_ibs_steps, "IBS")
+
+model_results$logplik <- fit_and_evaluate(best_logplik_penalty, best_logplik_stepsize, 
+                                         best_logplik_steps, "Log-likelihood")
+
+# Compare models
+message("\n[INFO]: Model comparison on test set:")
+comparison_df <- data.frame(
+  Metric = c("C-index", "IBS", "Log-likelihood"),
+  Test_C_index = c(
+    model_results$cindex$test_result$c_index,
+    model_results$ibs$test_result$c_index,
+    model_results$logplik$test_result$c_index
+  ),
+  Test_IBS = c(
+    model_results$cindex$test_result$ibs_value$IBS,
+    model_results$ibs$test_result$ibs_value$IBS,
+    model_results$logplik$test_result$ibs_value$IBS
+  )
+)
+print(comparison_df)
+
+# Save the best overall model (choose based on your preferred metric)
+# Here we're using the C-index model as default
+final_model <- model_results$cindex$model
+saveRDS(final_model, "final_coxboost_model.rds")
+message("\n[INFO]: Final model saved as 'final_coxboost_model.rds'")
+```
