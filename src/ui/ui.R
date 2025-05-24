@@ -72,7 +72,7 @@ predict_tab <- tabItem(tabName = "predict",
                              withDefaultSpinner(plotOutput("risk_distribution", height = 350)),
                              HTML("<p>This bar chart shows the distribution of risk scores among patients in the test set (green for the low-risk group, 
                              red for the high-risk group), with the current patient's risk score marked by a red dashed line. 
-                             Most low-risk patients have scores between –0.8 and 0, while high-risk patients are mainly distributed between 0 and 1.2. 
+                             Most low-risk patients have scores between –1.3 and 0, while high-risk patients are mainly distributed between 0 and 1.4. 
                              This visualization helps quantify an individual patient's risk and place it in the context of the entire cohort, 
                              making it easier to assess the patient's relative risk level.
 </p>")
