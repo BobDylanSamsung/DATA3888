@@ -1,13 +1,20 @@
+my_theme <- create_theme(
+  adminlte_sidebar(
+    dark_bg = "#3c8dbc",
+    dark_hover_bg = "lightblue",
+    dark_color = "#f7f7f7"
+  )
+)
 source("src/ui/home.R")
 source("src/ui/model_tab.R")
 source("src/ui/eda_tab.R")
 
 sidebar <- dashboardSidebar(
   sidebarMenu(
-    menuItem("Home", tabName = "home", icon = icon("house")),
-    menuItem("EDA", tabName = "eda", icon = icon("magnifying-glass-chart")),
-    menuItem("Model", tabName = "model", icon = icon("server")),
-    menuItem("Predict", tabName = "predict", icon = icon("chart-line"))
+    menuItem(" Home", tabName = "home", icon = icon("house")),
+    menuItem(" EDA", tabName = "eda", icon = icon("magnifying-glass-chart")),
+    menuItem(" Model", tabName = "model", icon = icon("server")),
+    menuItem(" Predict", tabName = "predict", icon = icon("chart-line"))
   )
 )
 
@@ -40,6 +47,8 @@ predict_tab <- tabItem(tabName = "predict",
         title = "Prediction Summary",
         status = "success",
         solidHeader = TRUE,
+        collapsible = TRUE,
+        collapsed = FALSE,
         width = 12,
         withDefaultSpinner(uiOutput("risk_summary"))
       )
@@ -52,6 +61,8 @@ predict_tab <- tabItem(tabName = "predict",
         title = "Predicted Survival",
         status = "info",
         solidHeader = TRUE,
+        collapsible = TRUE,
+        collapsed = FALSE,
         width = 6,
         withDefaultSpinner(plotOutput("survival_curve", height = 350)),
         uiOutput("time_slider_ui"),
@@ -61,8 +72,10 @@ predict_tab <- tabItem(tabName = "predict",
       # Risk score histogram
       box(
         title = "Risk Score Distribution",
-        status = "primary",
+        status = "info",
         solidHeader = TRUE,
+        collapsible = TRUE,
+        collapsed = FALSE,
         width = 6,
         withDefaultSpinner(plotOutput("risk_distribution", height = 350)),
         HTML("<p>This histogram shows how this patient's risk score compares to the test cohort. The red line indicates the patient's position.</p>")
@@ -76,14 +89,18 @@ predict_tab <- tabItem(tabName = "predict",
         title = "Top Contributing Genes",
         status = "warning",
         solidHeader = TRUE,
+        collapsible = TRUE,
+        collapsed = FALSE,
         width = 6,
         withDefaultSpinner(DT::DTOutput("gene_table")),
         HTML("<p><i>Positive contribution values indicate higher risk, negative values indicate protective effect.</i></p>")
       ),
       box(
         title = "Gene Expression Radar Chart",
-        status = "info",
+        status = "warning",
         solidHeader = TRUE,
+        collapsible = TRUE,
+        collapsed = FALSE,
         width = 6,
         withDefaultSpinner(plotOutput("radar_chart", height = 400)),
         HTML("<p>This radar chart shows how the patient's gene expression levels compare to the population average for the most influential genes. The population average forms a perfect octagon because the expression values are standardized, with mean=0 for the population. Deviations from this octagon indicate where this patient's expression differs from average.</p>")
@@ -93,9 +110,10 @@ predict_tab <- tabItem(tabName = "predict",
 )
 
 ui <- dashboardPage(
-  dashboardHeader(title="Survival Analysis for Pancreatic Cancer"),
+  dashboardHeader(title="My Dashboard"),
   sidebar,
   dashboardBody(
+    use_theme(my_theme),
     tabItems(
       home_tab,
       eda_tab,

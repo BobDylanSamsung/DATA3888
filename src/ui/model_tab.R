@@ -3,7 +3,7 @@ withDefaultSpinner <- function(ui_element) {
   shinycssloaders::withSpinner(
     ui_element,
     type = 8,
-    color = "#2E9FDF",
+    color = "#3c8dbc",
     size = 1
   )
 }
@@ -18,8 +18,10 @@ model_tab <- tabItem(
     column(width = 6,
            box(
              title = "Key Metrics",
-             status = "primary",
+             status = "info",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              div(
                fluidRow(
@@ -37,8 +39,10 @@ model_tab <- tabItem(
     column(width = 6,
            box(
              title = "Log-Rank Test Results",
-             status = "info",
+             status = "warning",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(tableOutput("log_rank_results")),
              p("The log-rank test compares survival distributions between risk groups. 
@@ -55,8 +59,10 @@ model_tab <- tabItem(
     column(width = 6,
            box(
              title = "Kaplan-Meier Survival Curve",
-             status = "primary",
+             status = "success",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("km_curve", height = "400px")),
              p("This plot shows survival probability over time for each risk group. 
@@ -67,9 +73,11 @@ model_tab <- tabItem(
     column(width = 6,
            box(
              title = "Cumulative Hazard Plot",
-             status = "warning",
+             status = "danger",
              solidHeader = TRUE,
              width = NULL,
+             collapsible = TRUE,
+             collapsed = FALSE,
              withDefaultSpinner(plotOutput("chaz_curve", height = "400px")),
              p("The cumulative hazard plot shows the accumulated risk of the event over time 
                 for each risk group. Steeper slopes indicate higher rates of events, providing 
@@ -86,8 +94,10 @@ model_tab <- tabItem(
     column(width = 6,
            box(
              title = "ROC Curve Analysis",
-             status = "primary",
+             status = "warning",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("roc_curve_plot", height = "400px")),
              p("The ROC curve shows the tradeoff between sensitivity and specificity at 
@@ -100,8 +110,10 @@ model_tab <- tabItem(
     column(width = 6,
            box(
              title = "Time Dependent AUC",
-             status = "info",
+             status = "success",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("time_auc_plot", height = "400px")),
              p("This plot shows how the model's discriminative ability (AUC) changes over time. 
@@ -113,8 +125,10 @@ model_tab <- tabItem(
   fluidRow(
     box(
       title = "Brier Score Plot",
-      status = "info",
+      status = "danger",
       solidHeader = TRUE,
+      collapsible = TRUE,
+      collapsed = FALSE,
       width = 6,
       withDefaultSpinner(plotOutput("brier_curve")),
       p("The Brier score measures prediction accuracy at different time points, with lower 
@@ -124,8 +138,10 @@ model_tab <- tabItem(
     ),
     box(
       title = "Feature Importance",
-      status = "success",
+      status = "info",
       solidHeader = TRUE,
+      collapsible = TRUE,
+      collapsed = FALSE,
       width = 6,
       withDefaultSpinner(plotOutput("feature_importance_plot", height = "500px")),
       p("This plot shows the relative importance of each gene in the final model. 
