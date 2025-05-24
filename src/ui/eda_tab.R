@@ -10,7 +10,7 @@ eda_tab <- tabItem(
       status = "primary",
       solidHeader = TRUE,
       width = 12,
-      p("This section presents visualizations to help understand gene expression patterns in the dataset. Note: All samples are tumor samples, 
+      p("This section presents visualisations to help understand gene expression patterns in the dataset.Note: All samples are tumor samples, 
         colored by survival status (blue = alive, red = deceased).")
     )
   ),
@@ -21,10 +21,14 @@ eda_tab <- tabItem(
   fluidRow(
     # Expression Histogram - left side
     column(width = 6,
+         tags$div(
+           style = "text-align: center;",
            box(
              title = "Expression Histogram",
              status = "info",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("expression_histogram", height = "350px")),
              p("This histogram summarizes the distribution of log₂-transformed gene expression values across all samples. The x-axis represents expression levels 
@@ -35,14 +39,19 @@ eda_tab <- tabItem(
              providing a solid foundation for downstream differential analysis and model development.
 ")
            )
+         )
     ),
     
     # Sample Boxplots - right side
     column(width = 6,
+         tags$div(
+           style = "text-align: center;",
            box(
              title = "Expression Boxplots by Sample",
-             status = "warning",
+             status = "danger",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("expression_per_sample_boxplot", height = "350px")),
              p("This plot shows boxplots of log₂-transformed gene expression values for each sample. Blue boxes represent the alive group and orange boxes 
@@ -50,6 +59,7 @@ eda_tab <- tabItem(
                The median values and spread are generally consistent across samples, with no obvious batch effects or unusual fluctuations. Additionally, 
                the expression distributions of alive and deceased patients largely overlap, indicating balanced and high-quality data across groups.")
            )
+         )
     )
   ),
   
@@ -59,10 +69,14 @@ eda_tab <- tabItem(
   fluidRow(
     # Summary Table 
     column(width = 6,
+         tags$div(
+           style = "text-align: center;",
            box(
              title = "Sample Statistics Table",
-             status = "success",
+             status = "warning",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(DT::DTOutput("summary_table")),
              p("This table lists descriptive statistics of log₂-transformed gene expression values for each of the 103 samples, including minimum (Min), 
@@ -72,13 +86,18 @@ eda_tab <- tabItem(
              batch effects and outliers have been effectively controlled, and expression distributions across samples are well balanced.
 ")
            )
+         )
     ),
     
     # Statistics Boxplot - right side
     column(width = 6,
+         tags$div(
+           style = "text-align: center;",
            box(
              title = "Statistics Distribution",
-             status = "primary",
+             status = "success",
+             collapsible = TRUE,
+             collapsed = FALSE,
              solidHeader = TRUE,
              width = NULL,
              withDefaultSpinner(plotOutput("summary_statistics_boxplot", height = "350px")),
@@ -87,6 +106,7 @@ eda_tab <- tabItem(
                4.312 (Mean), 5.48 (Q3), and 12.78 (Max). The interquartile ranges are narrow, and only a few mild outliers are present. 
                This indicates that overall expression levels and data variability are highly consistent across samples.")
            )
+         )
     )
   ),
   
@@ -96,10 +116,14 @@ eda_tab <- tabItem(
   fluidRow(
     # PCA Plot - left side
     column(width = 6,
+         tags$div(
+           style = "text-align: center;",
            box(
              title = "Principal Component Analysis",
              status = "danger",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("pca_plot", height = "400px")),
              p("This PCA scatter plot visualizes dimensionality reduction of 103 samples based on the first two principal components of 
@@ -109,14 +133,19 @@ eda_tab <- tabItem(
                two outcomes. However, some alive samples are more spread along the positive direction of PC1, suggesting potential prognostic signals along this axis. 
                In total, PC1 and PC2 together explain about 29% of the total variation.")
            )
+         )
     ),
     
     # Heatmap - right side
     column(width = 6,
+         tags$div(
+           style = "text-align: center;",
            box(
              title = "Top Gene Expression Patterns",
              status = "warning",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("variable_genes_heatmap", height = "400px")),
              p("This heatmap displays the expression patterns of the 75 most variable genes across 103 samples, with survival status indicated at the top 
@@ -127,18 +156,23 @@ eda_tab <- tabItem(
                indicating that while gene expression patterns related to prognosis are present, there is still notable heterogeneity. 
                Overall, this heatmap visually highlights the association between gene expression and patient survival status.")
            )
+         )
     )
   ),
   # -----------------------------------------------------------------
-  # 5. Survival Analysis Visualizations
+  # 5. Survival Analysis Visualisations
   # -----------------------------------------------------------------
   fluidRow(
     # Survival Time Distribution - left side
     column(width = 6,
+         tags$div(
+           style = "text-align: center;",
            box(
              title = "Survival Time Distribution",
-             status = "info",
+             status = "success",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("survival_time_plot", height = "400px")),
              p("This plot combines histograms and kernel density curves to compare the distribution of follow-up survival times between alive (blue) and 
@@ -148,14 +182,19 @@ eda_tab <- tabItem(
                Overall, deceased patients have noticeably shorter survival times, while the alive group shows longer and more heterogeneous survival, 
                providing clear evidence for validating survival models and performing risk stratification.")
            )
+         )
     ),
     
     # Volcano Plot - right side
     column(width = 6,
+         tags$div(
+           style = "text-align: center;",
            box(
              title = "Differential Expression Analysis",
-             status = "primary",
+             status = "info",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("volcano_plot", height = "400px")),
              p("This volcano plot displays gene expression differences between the alive and deceased groups. 
@@ -166,17 +205,21 @@ eda_tab <- tabItem(
              highlighted in red, indicating they may be biologically and statistically meaningful.
 ")
            )
+         )
     )
   ),
   # Add information box at the bottom
   fluidRow(
-    box(
-      title = "About This Analysis",
-      status = "success", 
-      solidHeader = TRUE,
-      width = 12,
-      p("This dataset contains tumor samples only, with patient survival information. The visualizations 
-        help identify gene expression patterns that might correlate with survival outcomes.")
+    tags$div(
+      style = "text-align: center;",
+      box(
+        title = "About This Analysis",
+        status = "primary", 
+        solidHeader = TRUE,
+        width = 12,
+        p("This dataset contains tumor samples only, with patient survival information. The visualisations 
+          help identify gene expression patterns that might correlate with survival outcomes.")
+      )
     )
   )
 )

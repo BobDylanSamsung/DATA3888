@@ -3,7 +3,7 @@ withDefaultSpinner <- function(ui_element) {
   shinycssloaders::withSpinner(
     ui_element,
     type = 8,
-    color = "#2E9FDF",
+    color = "#3c8dbc",
     size = 1
   )
 }
@@ -18,8 +18,10 @@ model_tab <- tabItem(
     column(width = 6,
            box(
              title = "Key Metrics",
-             status = "primary",
+             status = "info",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              div(
                fluidRow(
@@ -37,8 +39,10 @@ model_tab <- tabItem(
     column(width = 6,
            box(
              title = "Log-Rank Test Results",
-             status = "info",
+             status = "warning",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(tableOutput("log_rank_results")),
              p("The log-rank test compares survival distributions between risk groups. 
@@ -55,8 +59,10 @@ model_tab <- tabItem(
     column(width = 6,
            box(
              title = "Kaplan-Meier Survival Curve",
-             status = "primary",
+             status = "success",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("km_curve", height = "400px")),
              p("The plot shows the Kaplan–Meier survival curves for high and low risk groups predicted by the model (blue = low risk, yellow = high risk). The x-axis represents follow-up time in months, and the y-axis indicates survival probability. The shaded areas around the curves show the 95% confidence intervals.
@@ -70,9 +76,11 @@ These results indicate that the model’s risk stratification has meaningful pro
     column(width = 6,
            box(
              title = "Cumulative Hazard Plot",
-             status = "warning",
+             status = "danger",
              solidHeader = TRUE,
              width = NULL,
+             collapsible = TRUE,
+             collapsed = FALSE,
              withDefaultSpinner(plotOutput("chaz_curve", height = "400px")),
              p("This cumulative hazard plot shows how events accumulate over time for the high and low risk groups. 
              The x-axis represents follow-up time (months), and the y-axis shows cumulative hazard. The high-risk group’s curve rises steeply early on, 
@@ -93,8 +101,10 @@ These results indicate that the model’s risk stratification has meaningful pro
     column(width = 6,
            box(
              title = "ROC Curve Analysis",
-             status = "primary",
+             status = "warning",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("roc_curve_plot", height = "400px")),
              p("This plot shows the ROC curve for the model’s prediction of 12-month mortality risk. The x-axis represents the false positive rate 
@@ -106,8 +116,10 @@ These results indicate that the model’s risk stratification has meaningful pro
     column(width = 6,
            box(
              title = "Time Dependent AUC",
-             status = "info",
+             status = "success",
              solidHeader = TRUE,
+             collapsible = TRUE,
+             collapsed = FALSE,
              width = NULL,
              withDefaultSpinner(plotOutput("time_auc_plot", height = "400px")),
              p("This plot shows the time-dependent AUC curve and its confidence intervals for the model’s survival prediction on the test set at different 
@@ -123,8 +135,10 @@ These results indicate that the model’s risk stratification has meaningful pro
   fluidRow(
     box(
       title = "Brier Score Plot",
-      status = "info",
+      status = "danger",
       solidHeader = TRUE,
+      collapsible = TRUE,
+      collapsed = FALSE,
       width = 6,
       withDefaultSpinner(plotOutput("brier_curve")),
       p("This plot shows the time-dependent Brier Score of the model on the test set at different follow-up time points. 
@@ -136,8 +150,10 @@ These results indicate that the model’s risk stratification has meaningful pro
     ),
     box(
       title = "Feature Importance",
-      status = "success",
+      status = "info",
       solidHeader = TRUE,
+      collapsible = TRUE,
+      collapsed = FALSE,
       width = 6,
       withDefaultSpinner(plotOutput("feature_importance_plot", height = "500px")),
       p("This plot ranks gene importance based on the absolute values of their coefficients in the CoxBoost model. The x-axis shows the regression coefficients, 
