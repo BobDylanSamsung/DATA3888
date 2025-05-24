@@ -83,8 +83,8 @@ eda_tab <- tabItem(
              width = NULL,
              withDefaultSpinner(plotOutput("summary_statistics_boxplot", height = "350px")),
              p("This plot shows boxplots of the minimum (Min), first quartile (Q1), median, mean, third quartile (Q3), and maximum (Max) values of 
-               log₂-transformed gene expression across all samples. The medians of these statistics are roughly centered around 1.0 (Min), 2.9 (Q1), 4.15 (Median), 
-               4.30 (Mean), 5.50 (Q3), and 12.8 (Max). The interquartile ranges are narrow, and only a few mild outliers are present. 
+               log₂-transformed gene expression across all samples. The medians of these statistics are roughly centered around 1.00 (Min), 2.94 (Q1), 4.22 (Median), 
+               4.312 (Mean), 5.48 (Q3), and 12.78 (Max). The interquartile ranges are narrow, and only a few mild outliers are present. 
                This indicates that overall expression levels and data variability are highly consistent across samples.")
            )
     )
