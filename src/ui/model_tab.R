@@ -59,9 +59,12 @@ model_tab <- tabItem(
              solidHeader = TRUE,
              width = NULL,
              withDefaultSpinner(plotOutput("km_curve", height = "400px")),
-             p("This plot shows survival probability over time for each risk group. 
-                Separation between curves indicates how well the model stratifies patients 
-                into distinct prognostic groups. Wider separation suggests better risk discrimination.")
+             p("The plot shows the Kaplan–Meier survival curves for high and low risk groups predicted by the model (blue = low risk, yellow = high risk). The x-axis represents follow-up time in months, and the y-axis indicates survival probability. The shaded areas around the curves show the 95% confidence intervals.
+
+The curve for the high-risk group declines more rapidly and ends at a lower survival probability, indicating a worse prognosis. The log-rank test yields a p-value of 0.047, which is below the 0.05 threshold for statistical significance. This suggests that the difference in survival between the high and low risk groups is statistically significant under the current model and sample size.
+
+These results indicate that the model’s risk stratification has meaningful prognostic value.
+")
            )
     ),
     column(width = 6,
@@ -71,9 +74,13 @@ model_tab <- tabItem(
              solidHeader = TRUE,
              width = NULL,
              withDefaultSpinner(plotOutput("chaz_curve", height = "400px")),
-             p("The cumulative hazard plot shows the accumulated risk of the event over time 
-                for each risk group. Steeper slopes indicate higher rates of events, providing 
-                insight into how risk accumulates differently between groups.")
+             p("This cumulative hazard plot shows how events accumulate over time for the high and low risk groups. 
+             The x-axis represents follow-up time (months), and the y-axis shows cumulative hazard. The high-risk group’s curve rises steeply early on, 
+             with a much higher cumulative hazard than the low-risk group. In contrast, the low-risk group increases more slowly, 
+             and the gap between the two groups grows over time. This plot helps visualize how events accumulate across different risk levels, 
+             and shows that the model can effectively separate high- and low-risk patients: those in the high-risk group experience events earlier and more frequently, 
+             demonstrating the model’s good risk stratification ability.
+")
            )
     )
   ),
@@ -90,10 +97,9 @@ model_tab <- tabItem(
              solidHeader = TRUE,
              width = NULL,
              withDefaultSpinner(plotOutput("roc_curve_plot", height = "400px")),
-             p("The ROC curve shows the tradeoff between sensitivity and specificity at 
-                different classification thresholds. The Area Under the Curve (AUC) measures 
-                overall discriminative ability, with values closer to 1 indicating better 
-                performance.")
+             p("This plot shows the ROC curve for the model’s prediction of 12-month mortality risk. The x-axis represents the false positive rate 
+               (1 – specificity), and the y-axis shows the true positive rate (sensitivity). The diagonal dashed line represents the baseline of random prediction. 
+               The area under the curve (AUC) is 0.859 (95% CI: 0.657–1), indicating that the model has a moderate ability to distinguish between outcomes. ")
            )
     ),
     # Time-dependent AUC - right side
@@ -104,9 +110,13 @@ model_tab <- tabItem(
              solidHeader = TRUE,
              width = NULL,
              withDefaultSpinner(plotOutput("time_auc_plot", height = "400px")),
-             p("This plot shows how the model's discriminative ability (AUC) changes over time. 
-                It helps identify when the model performs best and whether its predictive power 
-                remains stable or deteriorates with longer follow-up.")
+             p("This plot shows the time-dependent AUC curve and its confidence intervals for the model’s survival prediction on the test set at different 
+             follow-up time points (6, 12, 18, and 24 months). The AUC is approximately 0.85 at 6 months, increases to around 0.87 at 12 months, 
+             0.76 at 18 months, and slightly drops to 0.75 at 24 months. As follow-up time increases, the model’s discriminative 
+             ability improves gradually, reaches its best performance in the middle period, and then slightly declines. The wide confidence intervals, 
+             especially at early time points, suggest estimation uncertainty due to limited sample size. This plot helps identify when the model performs 
+             best and assess its stability over time.
+")
            )
     )
   ),
@@ -117,10 +127,12 @@ model_tab <- tabItem(
       solidHeader = TRUE,
       width = 6,
       withDefaultSpinner(plotOutput("brier_curve")),
-      p("The Brier score measures prediction accuracy at different time points, with lower 
-         values indicating better calibration. This plot helps assess how well the predicted 
-         probabilities match actual outcomes over the follow-up period. Values below 0.25 
-         generally indicate good predictive accuracy.")
+      p("This plot shows the time-dependent Brier Score of the model on the test set at different follow-up time points. 
+      The x-axis represents follow-up months, and the y-axis is the Brier Score. The dashed line at 0.25 serves as a reference threshold. 
+      The Brier Score starts around 0.12, increases gradually to about 0.22 at 30 months, then steadily decreases to around 0.13 by 48 months, 
+      and remains below 0.25 throughout. This indicates that the predicted survival probabilities match the actual outcomes well, 
+      with better calibration and more stable prediction accuracy in the later follow-up periods.
+")
     ),
     box(
       title = "Feature Importance",
@@ -128,10 +140,12 @@ model_tab <- tabItem(
       solidHeader = TRUE,
       width = 6,
       withDefaultSpinner(plotOutput("feature_importance_plot", height = "500px")),
-      p("This plot shows the relative importance of each gene in the final model. 
-       Features are sorted by their absolute effect size. Blue bars indicate genes associated with 
-       improved survival (protective), while red bars show genes associated with worse survival (risk). 
-       Longer bars represent stronger effects on patient prognosis.")
+      p("This plot ranks gene importance based on the absolute values of their coefficients in the CoxBoost model. The x-axis shows the regression coefficients, 
+        which reflect each gene's impact on survival outcomes. Positive values (yellow) indicate that higher expression of the gene is associated with worse prognosis, 
+        while negative values (blue) suggest a protective effect. The most influential gene is AGRN with a coefficient of about +0.32, 
+        indicating that its high expression significantly increases event risk. On the protective side, PRDM16 and 
+        CAMTA1 show strong negative effects, suggesting their high expression is linked to better survival. 
+        Overall, these seven genes are the main drivers of the model’s risk stratification.")
     )
   ),
   fluidRow(
@@ -141,10 +155,11 @@ model_tab <- tabItem(
       solidHeader = TRUE,
       width = 12,
       withDefaultSpinner(plotOutput("calibration_plot", height = "450px")),
-      p("This calibration plot assesses how well the predicted survival probabilities match the observed outcomes. 
-       Each point represents a group of patients with similar predicted risk. 
-       Points close to the diagonal line indicate good calibration. 
-       Above the line means the model underestimates risk, below means it overestimates risk.")
+      p("This calibration plot assesses how well the predicted 6-month survival probabilities align with the observed outcomes across different risk groups.
+      Each blue dot represents a group of patients, with the x-axis showing the predicted survival probability and the y-axis showing the observed survival probability.
+      The dashed diagonal line represents perfect calibration (i.e., predicted = observed). Points close to this line indicate good agreement between prediction and outcome.
+      In this plot, points lie relatively close to the diagonal, suggesting that the model’s predictions are reasonably well-calibrated at the 6-month mark.
+")
     )
   )
 )
