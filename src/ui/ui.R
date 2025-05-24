@@ -67,8 +67,13 @@ predict_tab <- tabItem(tabName = "predict",
         withDefaultSpinner(plotOutput("survival_curve", height = 350)),
         uiOutput("time_slider_ui"),
         htmlOutput("survival_probability"),
-        HTML("<p>This curve shows the estimated survival probability over time. The red dashed lines indicate the median survival time.</p>")
-      ),
+         HTML("<p>This plot shows the model-predicted survival probability for a specific patient over time. 
+                           The x-axis represents time (in months), and the y-axis shows the predicted survival probability. 
+                           The red dashed lines indicate the predicted survival probability at a specific time point. 
+                           The slider allows users to adjust the time point interactively and view survival probabilities at different stages. 
+                           Overall, the curve smoothly declines from high to low over time.
+</p>")
+    ),
       # Risk score histogram
       box(
         title = "Risk Score Distribution",
@@ -78,8 +83,13 @@ predict_tab <- tabItem(tabName = "predict",
         collapsed = FALSE,
         width = 6,
         withDefaultSpinner(plotOutput("risk_distribution", height = 350)),
-        HTML("<p>This histogram shows how this patient's risk score compares to the test cohort. The red line indicates the patient's position.</p>")
-      )
+        HTML("<p>This bar chart shows the distribution of risk scores among patients in the test set (green for the low-risk group, 
+                             red for the high-risk group), with the current patient's risk score marked by a red dashed line. 
+                             Most low-risk patients have scores between –1.3 and 0, while high-risk patients are mainly distributed between 0 and 1.4. 
+                             This visualization helps quantify an individual patient's risk and place it in the context of the entire cohort, 
+                             making it easier to assess the patient's relative risk level.
+</p>")
+    )
     ),
     
     # Third row: Gene table and gene contributions
@@ -93,7 +103,11 @@ predict_tab <- tabItem(tabName = "predict",
         collapsed = FALSE,
         width = 6,
         withDefaultSpinner(DT::DTOutput("gene_table")),
-        HTML("<p><i>Positive contribution values indicate higher risk, negative values indicate protective effect.</i></p>")
+       HTML("<p>This table calculates the individual contribution of each gene to the patient's risk score by multiplying the model's 
+       regression coefficient for each gene with the patient's standardized gene expression value. A positive value indicates the 
+       gene increases risk in this patient, while a negative value suggests a protective effect. The larger the absolute value, 
+       the greater the gene's impact on prognosis. Since gene expression profiles vary across patients, 
+       the ranking and direction of contributions will differ.</p>")
       ),
       box(
         title = "Gene Expression Radar Chart",
