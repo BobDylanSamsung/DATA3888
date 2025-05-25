@@ -2,7 +2,7 @@
 environment_image_path <- "environment_image.RData"
 source("src/global.R")
 # Check if environment image exists
-if (file.exists(environment_image_path)) {
+if (!file.exists(environment_image_path)) {
   # Load the environment image if it exists
   message("Loading pre-trained model from saved environment...")
   load(environment_image_path)

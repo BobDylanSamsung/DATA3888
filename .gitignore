@@ -4,3 +4,6 @@ environment_image.Rdata
 .Renviron
 .RData
 .Rhistory
+**/.DS_Store
+vscode
+vscode/*
