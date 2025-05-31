@@ -1,0 +1,59 @@
+---
+title: "Biomed8 Group Report"
+format: html
+editor: visual
+---
+
+## Executive Summary
+
+Pancreatic cancer is an incredibly deadly disease with a critical need for improved prognostic tools to guide personalized treatment. This project addresses this challenge by developing a personalized survival prediction tool for pancreatic cancer patients using gene expression data. Our approach leverages publicly available Gene Expression Omnibus (GEO) datasets to identify prognostic biomarkers and build a predictive model for pathologists to utilize.
+
+The main findings include the identification of a concise set of significant genes that are most predictive of survival in patients, selected from an initial pool of over 28,000 genes using a minimum depth Random Forest algorithm on Rstudio. A CoxBoost model was then trained and optimized on these features through hyperparameter tuning. Model performance was rigorously evaluated on an independent test set using the Concordance Index (C-index) and Integrated Brier Score (IBS), demonstrating predictive accuracy and generalizability.
+
+The practical relevance of this analysis lies in its potential to aid clinicians in risk stratification and treatment planning by providing interpretable, patient-specific survival predictions. The model produces outputs including patient-specific risk scores, stratified risk groups, estimated survival times, and identifies the top gene contributors influencing risk predictions. To facilitate practical usage for clinicians, we developed a Shiny web application enabling users to upload patient gene expression data and receive comprehensive survival risk assessments. This work demonstrates a robust pipeline from raw data processing to a user-friendly predictive tool for precision medicine in oncology.
+
+## Background
+
+Characterized by late diagnosis and poor prognosis, pancreatic cancer remains one of the most formidable challenges in oncology. Survival rates are among the lowest for all cancers, highlighting an strong need for better tools to predict patient outcomes and personalized treatment strategies (Siegel et al., 2023). Gene expression profiling has be shown to be a promising pathway for discovering important biomarkers that can guide prognosis and treatment therapy (Uhlen et al., 2017). However, the high dimensionality nature of gene expression data presents significant analytical hurdles, including the risk of overfitting, immense computational intensity, and difficulty in interpreting results.
+
+This project aims to develop and validate a robust model for predicting survival in pancreatic cancer patients based on tumor gene expression profiles. The objective is to create an accessible tool that translates complex genomic data into valuable insights for clinicians and researchers, ultimately contributing to improved patient management and care.
+
+### Data Description
+
+The primary data for this project were sourced from the Gene Expression Omnibus (GEO), a public repository of genomics data. Specifically, two datasets were utilized, as detailed in our data loading scripts `(src/load_data.R)` and project documentation (`README.md`):
+
+-   **GSE28735:** Contains gene expression data from paired pancreatic tumors and adjacent non-tumor tissue samples from 45 patients (Badea et al., 2008). For our analysis, only tumor samples with complete survival information were retained.
+
+-   **GSE62452:** This dataset includes gene expression data from 69 pancreatic ductal adenocarcinoma samples, along with corresponding survival information (Kirby et al., 2016).
+
+The `src/load_data.R` script utilizes the GEOquery R package to automate the download and initial data preprocessing. Phenotype data from both datasets were cleaned and standardized to ensure consistency in survival information (specifically, `months_survived` and `is_dead status`) and filtered to ensure only tumor tissue samples were retained. Expression matrices from both datasets were combined, focusing genes present in both platforms, resulting in a unified dataset comprising **(X)** samples and **(Y)** genes.
+
+A defined holdout set of four samples (`GSM1527137`, `GSM1527230`, `GSM711944`, `GSM711984`) was explicitly set aside before model training and saved separately in the `patient_data` directory. These were reserved for external validation and demonstration within the final Shiny application. The remaining data was partitioned for model training, validation, and testing.
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+## Method
+
+Our pipeline consisted of multiple stages including data preprocessing, exploratory data analysis, feature selection, survival model development with hyperparameter tuning, model evaluation using a variety of metrics, and deployment as an interactive Shiny web application. All analyses were performed in R using specialized CRAN and Bioconductor packages.
+
+### 2.1 Data Preprocessing and Tools Used:
+
+**Data Acquisition:** We retrieved gene expression and clinical data from the NCBI Gene Expression Omnibus (GEO) using the GEOquery R package. Two datasets were selected for analysis: GSE28735 and GSE62452, each containing pancreatic tumor samples from patients with associated survival outcomes.
+
+**Data Cleaning:** Phenotype data was standardized to unify survival endpoints (`is_dead`, `months_survived`), and samples were filtered to include only tumor tissue with complete follow-up information.
+
+**Gene Expression Processing:** Expression matrices were merged by common gene identifiers to form a unified dataset. Expression values were log-transformed where necessary and examined for normalization consistency.
+
+**Data Partitioning**: The combined dataset was split into training (60%), validation (20%), and test (20%) sets using stratified sampling based on survival status with the `caret::createDataPartition` function to ensure unbiased model evaluation.
+
+### 2.2 Exploratory Data Analysis
+
+**Summary Statistics:** Descriptive statistics such as mean, median, quantiles for gene expression distributions were computed per sample and potential outliers were identified.
+
+**Principal Component Analysis:** PCA was done on scaled, transposed expression data to help visualize sample clustering and detect batch effects or dataset-specific biases.
+
+**Heatmaps:** Expression patterns of the top 75 most variable genes were visualized via heatmaps annotated by survival status to reveal patterns associated with this covariate.
+
+**Survival Visualization:** Kaplan-Meier curves were plotted for the overall cohort, and potentially stratified by dataset, to visualize the survival probability over time.
+
+**Differential Expression:** Limma-based differential expression analysis contrasted deceased vs. surviving patients, with results depicted using volcano plots to highlight prognostic candidate genes.
