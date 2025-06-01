@@ -439,6 +439,9 @@ model_results$ibs <- fit_and_evaluate(best_ibs_penalty, best_ibs_stepsize,
 
 model_results$logplik <- fit_and_evaluate(best_logplik_penalty, best_logplik_stepsize, 
                                          best_logplik_steps, "Log-likelihood")
+model_results$mix <- fit_and_evaluate(15, 0.3, 7, "mix")
+
+print(model_results$mix$test_result)
 
 # Compare models
 message("\n[INFO]: Model comparison on test set:")
@@ -453,13 +456,8 @@ comparison_df <- data.frame(
     model_results$cindex$test_result$ibs_value$IBS,
     model_results$ibs$test_result$ibs_value$IBS,
     model_results$logplik$test_result$ibs_value$IBS
+
   )
 )
 print(comparison_df)
-
-# Save the best overall model (choose based on your preferred metric)
-# Here we're using the C-index model as default
-final_model <- model_results$cindex$model
-saveRDS(final_model, "final_coxboost_model.rds")
-message("\n[INFO]: Final model saved as 'final_coxboost_model.rds'")
 ```
