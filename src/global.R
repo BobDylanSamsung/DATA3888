@@ -98,6 +98,7 @@ feature_data <- reactive({
   return(importance_df)
 })
 
+# Loading state wrapper for Shiny visuals
 withDefaultSpinner <- function(ui_element) {
   shinycssloaders::withSpinner(
     ui_element,
