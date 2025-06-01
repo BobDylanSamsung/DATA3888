@@ -57,16 +57,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </style>
 
 
-<script src="Biomed8 report_files/libs/clipboard/clipboard.min.js"></script>
-<script src="Biomed8 report_files/libs/quarto-html/quarto.js"></script>
-<script src="Biomed8 report_files/libs/quarto-html/popper.min.js"></script>
-<script src="Biomed8 report_files/libs/quarto-html/tippy.umd.min.js"></script>
-<script src="Biomed8 report_files/libs/quarto-html/anchor.min.js"></script>
-<link href="Biomed8 report_files/libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="Biomed8 report_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
-<script src="Biomed8 report_files/libs/bootstrap/bootstrap.min.js"></script>
-<link href="Biomed8 report_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="Biomed8 report_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script src="Biomed8Report_files/libs/clipboard/clipboard.min.js"></script>
+<script src="Biomed8Report_files/libs/quarto-html/quarto.js"></script>
+<script src="Biomed8Report_files/libs/quarto-html/popper.min.js"></script>
+<script src="Biomed8Report_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="Biomed8Report_files/libs/quarto-html/anchor.min.js"></script>
+<link href="Biomed8Report_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="Biomed8Report_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="Biomed8Report_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="Biomed8Report_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="Biomed8Report_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
 
 
 </head>
@@ -98,35 +98,156 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="executive-summary" class="level2">
 <h2 class="anchored" data-anchor-id="executive-summary">Executive Summary</h2>
-<p>Pancreatic cancer is an incredibly deadly disease with a critical need for improved prognostic tools to guide personalized treatment. This project addresses this challenge by developing a personalized survival prediction tool for pancreatic cancer patients using gene expression data. Our approach leverages publicly available Gene Expression Omnibus (GEO) datasets to identify prognostic biomarkers and build a predictive model for pathologists to utilize.</p>
-<p>The main findings include the identification of a concise set of significant genes that are most predictive of survival in patients, selected from an initial pool of over 28,000 genes using a minimum depth Random Forest algorithm on Rstudio. A CoxBoost model was then trained and optimized on these features through hyperparameter tuning. Model performance was rigorously evaluated on an independent test set using the Concordance Index (C-index) and Integrated Brier Score (IBS), demonstrating predictive accuracy and generalizability.</p>
-<p>The practical relevance of this analysis lies in its potential to aid clinicians in risk stratification and treatment planning by providing interpretable, patient-specific survival predictions. The model produces outputs including patient-specific risk scores, stratified risk groups, estimated survival times, and identifies the top gene contributors influencing risk predictions. To facilitate practical usage for clinicians, we developed a Shiny web application enabling users to upload patient gene expression data and receive comprehensive survival risk assessments. This work demonstrates a robust pipeline from raw data processing to a user-friendly predictive tool for precision medicine in oncology.</p>
+<p>Improved prognostic tools are needed to guide the treatment of pancreatic cancer, which has one of the highest mortality rates in the world. (University of Utah Health, 2019) This project addresses this hurdle by using gene expression data to develop a personalised survival prediction tool for clinicians’s use. Our approach utilises Gene Expression Omnibus datasets, which are publicly available, to identify biomarkers and develop a robust predictive model for pathologists.</p>
+<p>Our main findings were the identification of select significant genes from an initial pool of over 28,000 genes using a minimum depth Random Forest. The selected genes were most predictive of survival in cancer patients. Subsequently, a CoxBoost model was trained and optimised on the selected features through hyperparameter tuning. Model performance was evaluated using an independent test set and measured primarily by the integrated Brier score (IBS). The concordance index, also known as the C-index and the time-dependent area under the ROC curve, was also used.</p>
+<p>This analysis holds practical relevance in its potential to increase the efficiency of clinicians. It involves risk stratification by providing personalised and interpretable patient survival predictions. The model output includes risk scores, risk groups, estimated survival probability over time, and identifies which genes contribute most significantly to risk predictions. A comprehensive shiny app was also developed to enable ease of use, allowing users to input CSV files and receive a personalised risk assessment.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/fig1.jpeg" class="img-fluid figure-img"></p>
+<figcaption>Figure 1: Flowchart diagram outlining the entire project pipeline from processing data to predicting survival results</figcaption>
+</figure>
+</div>
 </section>
 <section id="background" class="level2">
 <h2 class="anchored" data-anchor-id="background">1. Background</h2>
-<p>Characterized by late diagnosis and poor prognosis, pancreatic cancer remains one of the most formidable challenges in oncology. Survival rates are among the lowest for all cancers, highlighting an strong need for better tools to predict patient outcomes and personalized treatment strategies (Siegel et al., 2023). Gene expression profiling has be shown to be a promising pathway for discovering important biomarkers that can guide prognosis and treatment therapy (Uhlen et al., 2017). However, the high dimensionality nature of gene expression data presents significant analytical hurdles, including the risk of overfitting, immense computational intensity, and difficulty in interpreting results.</p>
-<p>This project aims to develop and validate a robust model for predicting survival in pancreatic cancer patients based on tumor gene expression profiles. The objective is to create an accessible tool that translates complex genomic data into valuable insights for clinicians and researchers, ultimately contributing to improved patient management and care.</p>
-<section id="data-description" class="level3">
-<h3 class="anchored" data-anchor-id="data-description">Data Description</h3>
-<p>The primary data for this project were sourced from the Gene Expression Omnibus (GEO), a public repository of genomics data. Specifically, two datasets were utilized, as detailed in our data loading scripts <code>(src/load_data.R)</code> and project documentation (<code>README.md</code>):</p>
-<ul>
-<li><p><strong>GSE28735:</strong> Contains gene expression data from paired pancreatic tumors and adjacent non-tumor tissue samples from 45 patients (Badea et al., 2008). For our analysis, only tumor samples with complete survival information were retained.</p></li>
-<li><p><strong>GSE62452:</strong> This dataset includes gene expression data from 69 pancreatic ductal adenocarcinoma samples, along with corresponding survival information (Kirby et al., 2016).</p></li>
-</ul>
-<p>The <code>src/load_data.R</code> script utilizes the GEOquery R package to automate the download and initial data preprocessing. Phenotype data from both datasets were cleaned and standardized to ensure consistency in survival information (specifically, <code>months_survived</code> and <code>is_dead status</code>) and filtered to ensure only tumor tissue samples were retained. Expression matrices from both datasets were combined, focusing genes present in both platforms, resulting in a unified dataset comprising <strong>(X)</strong> samples and <strong>(Y)</strong> genes.</p>
-<p>A defined holdout set of four samples (<code>GSM1527137</code>, <code>GSM1527230</code>, <code>GSM711944</code>, <code>GSM711984</code>) was explicitly set aside before model training and saved separately in the <code>patient_data</code> directory. These were reserved for external validation and demonstration within the final Shiny application. The remaining data was partitioned for model training, validation, and testing.</p>
-<p>When you click the <strong>Render</strong> button a document will be generated that includes both content and the output of embedded code. You can embed code like this:</p>
-</section>
+<p>Infamous amongst cancers for its commonly late diagnosis and poor survival prognosis, there is a crucial need for improved tools to predict outcomes and support personalised treatment for pancreatic cancer patients. Gene expression profiling has emerged as a promising approach for identifying biomarkers that can help guide clinical decisions for treatment and care (Newhook et al., 2014). However, the dimensionality of gene expression data poses a significant analytical hurdle. The risks include overfitting, a heavy computational load, and difficulty in interpreting the results.</p>
+<p>This project aimed to develop a robust survival prediction model using gene expression data from tumorous tissue samples. The goal was to improve patient care by generating interpretable insights for pathologists, clinicians and researchers from high-dimensional gene expression data using machine learning techniques. The resulting Shiny app was specifically designed to provide pathologists with an intuitive and practical tool to support decision-making in cancer prognosis and patient management.</p>
+<p>Data for this project was sourced from the Gene Expression Omnibus (GEO), a public repository containing data for various outlets of research. Based on a 2023 study by Posta and Győrffy two datasets were selected, GSE28735, GSE62452, containing 45 and 69 tumour samples respectively. Using the R package GEOquery, the data was loaded, phenotype data cleaned and standardised to unify survival endpoints and filtered to retain tumour samples with complete follow-up. Expression matrices were merged by intersecting genes, yielding a combined dataset of 105 samples and 28,000+genes. A holdout set of four samples was reserved for external validation, while the remaining data was partitioned to ensure robust model training, testing and validation.</p>
+<p>The CoxBoost model was chosen for this report due to its ability to handle high dimensional data. CoxBoost is a survival analysis approach that combines componentwise likelihood based boosting with Cox proportional hazards regression. Boosting is an iterative modelling strategy that continuously adds simple models to gradually correct the errors or deficiencies generated in the previous iteration, thereby continuously improving prediction accuracy. Specifically, in each iteration, the direction for the next optimisation is determined based on the deficiencies of the current model. Then, a new model is trained to make up for these deficiencies, ultimately forming an overall model with better comprehensive performance (Simon et al., 2011).</p>
+<p>CoxBoost precisely combines this boosting strategy with Cox regression. It can not only handle the right deletion problem in survival data very well, but also deal with the common modelling instability problem in high-dimensional data. Compared with the traditional Cox regression, CoxBoost can maintain good stability and predictive performance even when the number of variables is much greater than the number of samples (Bair et al., 2006).</p>
 </section>
 <section id="method" class="level2">
 <h2 class="anchored" data-anchor-id="method">2. Method</h2>
-<p>Our pipeline consisted of multiple stages including data preprocessing, exploratory data analysis, feature selection, survival model development with hyperparameter tuning, model evaluation using a variety of metrics, and deployment as an interactive Shiny web application. All analyses were performed in R using specialized CRAN and Bioconductor packages.</p>
-<section id="data-preprocessing-and-tools-used" class="level3">
-<h3 class="anchored" data-anchor-id="data-preprocessing-and-tools-used">2.1 Data Preprocessing and Tools Used:</h3>
-<p><strong>Data Acquisition:</strong> We retrieved gene expression and clinical data from the NCBI Gene Expression Omnibus (GEO) using the GEOquery R package. Two datasets were selected for analysis: GSE28735 and GSE62452, each containing pancreatic tumor samples from patients with associated survival outcomes.</p>
-<p><strong>Data Cleaning:</strong> Phenotype data was standardized to unify survival endpoints (<code>is_dead</code>, <code>months_survived</code>), and samples were filtered to include only tumor tissue with complete follow-up information.</p>
-<p><strong>Gene Expression Processing:</strong> Expression matrices were merged by common gene identifiers to form a unified dataset. Expression values were log-transformed where necessary and examined for normalization consistency.</p>
-<p><strong>Data Partitioning</strong>: The combined dataset was split into training (60%), validation (20%), and test (20%) sets using stratified sampling based on survival status with the <code>caret::createDataPartition</code> function to ensure unbiased model evaluation.</p>
+<p>This project encompassed multiple stages, beginning with data preprocessing and exploratory data analysis. Subsequently, feature selection was conducted alongside the development and hyperparameter tuning of survival prediction models. Following the construction of a preliminary model, rigorous evaluation was performed using a range of performance metrics. Finally, the refined model was deployed as an interactive Shiny web application, providing a user-friendly platform to demonstrate the final product. All analyses were conducted in R, leveraging a diverse suite of CRAN and Bioconductor packages.</p>
+<section id="data-preprocessing" class="level3">
+<h3 class="anchored" data-anchor-id="data-preprocessing">2.1 Data Preprocessing</h3>
+<p>Gene expression and clinical data for the datasets were loaded into the R Studio environment through the GEOquery R package. The datasets contained data on pancreatic cancer samples, including the gene expression values, as well as clinical phenotype information regarding the patients. The first step taken was to align our phenotype data for uniformity across the datasets, Specifically the outcome variables event status (is_dead) and survival time (months_survived) and non-tumour samples were removed, ensuring that only tumour samples with complete survival status information were retained. This step was important to enable merging and consistency of data between the two datasets.</p>
+<p>Following standardisation, the cleaned gene expression matrices from both datasets were merged based on shared gene symbol identifiers to create a unified dataset. Expression values were log-transformed and viewed to confirm normalised consistency. Finally, the combined dataset was partitioned into training (60%), validation (20%), and test (20%) sets using stratified sampling to maintain balanced proportions and unbiased model evaluation. This stratified sampling method was used to maintain unbiased model evaluation and validate that the model performed well on new, unseen gene expression profiles from patients.</p>
+</section>
+<section id="exploratory-data-analysis" class="level3">
+<h3 class="anchored" data-anchor-id="exploratory-data-analysis">2.2 Exploratory Data Analysis</h3>
+<p>To better understand the structure of the datasets, summary statistics, including mean, median and quantiles were calculated for each gene’s expression data across all samples. This was then used to visualise the data and identify potential outliers. Principal Component Analysis (PCA) was performed on the transposed expression matrix to visualise clustering of classes, as it helps reduce dimensionality while retaining the linear combination of variables with the highest variance. To further explore and understand the data, a heatmap of the 75 most variable genes was generated, with samples annotated by survival status to investigate patterns that might be associated with survival status outcomes. The output from the heatmap allowed for visual inspection of whether certain genes exhibited differential expression correlating with survival status.&nbsp;</p>
+<p>Additionally, the limma package was used to compare gene expression between deceased and surviving patients. The results were summarised in a volcano plot highlighting the spread of genes based on statistical significance, thereby aiding in the identification of relevant genes for our survival predictions.</p>
+</section>
+<section id="feature-selection" class="level3">
+<h3 class="anchored" data-anchor-id="feature-selection">2.3 Feature Selection</h3>
+<p>Due to the high dimensionality of gene expression data, feature selection is often required to optimise machine learning. These datasets were no exception, with over 30,000 gene expression features, despite relatively few samples. To address this, a minimal-depth random survival forest was employed to identify the most significant genes as recommended by Posta and Győrffy (2023). Minimal depth measures the depth at which a specific gene is first used within a decision tree split. Genes that congregate closer to the top levels of the tree are seen as more important for predictions (Seifert, Gundlach, &amp; Szymczak, 2019). The genes were ranked based on their allocated minimal depth scores, and the top 15 genes were selected accordingly. This significantly reduced the feature space, eliminating many noisy features, and hence facilitated a faster and more efficient subsequent modelling process.</p>
+</section>
+<section id="coxboost-model-development" class="level3">
+<h3 class="anchored" data-anchor-id="coxboost-model-development">2.4 CoxBoost Model Development</h3>
+<p>To optimise model performance, a comprehensive grid search was conducted over two key hyperparameters; penalty and step size. The penalty value affects the regularisation applied to the parameter vector in each boosting step to prevent overfitting and ranged from 0 to 50 in increments of 5. Meanwhile, the stepsize affects the size of each boosting step after a covariate has been selected and took the values of 0.1, 0.3, 0.5, 0.7 and 1.0.</p>
+<p>The final model was selected based on the hyperparameter set that achieved the best performance on the test set and then evaluated on a held-out validation set to assess its generalizability. The performance was assessed using two key survival analysis metrics:</p>
+<p><strong>Integrated Brier Score (IBS)</strong>: The IBS reflects the average squared difference between the predicted survival probability and the actual outcome for each individual over time. Lower values indicate better calibration and accuracy of the survival probability estimates for individual patients.</p>
+<p><strong>Concordance Index (C-index)</strong>: The C-index measures the probability that, when comparing two patients, the model correctly identifies the one with the higher risk of an adverse event. Higher values indicate stronger discriminative power between pairs of patients.</p>
+<p>Specifically Integrated Brier Score was minimised whilst choosing a suitably high concordance index.</p>
+</section>
+</section>
+<section id="results" class="level2">
+<h2 class="anchored" data-anchor-id="results">3. Results</h2>
+<section id="model-performance-metrics" class="level3">
+<h3 class="anchored" data-anchor-id="model-performance-metrics">3.1 Model Performance Metrics</h3>
+<p>While both metrics provide valuable insights, greater emphasis was placed on the IBS score as it aligned more closely with our project’s goal of delivering accurate survival probability estimates over time, rather than simply ranking patients relative to each other. This focus on calibration and accuracy was especially relevant for our target users, pathologists, who require precise survival probability estimates to inform patient care. After running the hyperparameter grid search, the penalty value of 15 and stepsize of 0.3 were chosen by hand and found that 7 was the optimal number of boosting steps.</p>
+<p>The CoxBoost survival model demonstrated excellent predictive performance in multiple evaluation indicators. The Brier score does not exceed 0.25 at any timepoint with an IBS of 0.144, indicating that the predicted probability of the model aligns closely with the actual outcome and has a high calibration accuracy. Further, It achieved a test set C-index of 0.722 indicating a strong discriminative ability, and offering a valuable tool for precision medicine.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/AUC_plot.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 2: Time dependent area under the Receiver Operating Characteristic curve</figcaption>
+</figure>
+</div>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/km_survival_plot.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 3: Kaplan-Meier survival curves for high and low risk groups with a p-value less than 0.05 indicating significant difference</figcaption>
+</figure>
+</div>
+<p>As shown in the figures above, the time-dependent AUC indicates that the model has a high discriminative ability between high and low risk groups at different follow-up time points. Although it slightly decreases over time, it still remains at an high level overall. The Kaplan-Meier survival curve further verified the effectiveness of the model in stratifying patients’ risks, exhibiting a significant difference in survival rate between the high and low-risk groups (p = 0.047). Together, these highlight the models strong discriminative ability and practical value in survival prediction and risk assessment, thus providing support for individualised clinical treatment.</p>
+<p>In the feature importance analysis, genes such as AGRN and PRDM16 have the greatest impact on the model prediction results. Among them, AGRN is associated with a poor prognosis, while PRDM16 shows a protective effect, suggesting its potential biological significance in the survival of patients. Several of the selected genes have also been previously implicated in cancer-related pathways, further supporting the biological interpretability of the model (Wang et al, 2025; He et al, 2020). Genes with 0 coefficients were selected in the random survival forest but ultimately contributed no additional predictive value during boosting, indicating low marginal effect.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/feature_importance_coxboost.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 4: Features selected by minimum depth random forest and their coefficients in the CoxBoost model</figcaption>
+</figure>
+</div>
+</section>
+<section id="interactive-prediction-with-shiny-application" class="level3">
+<h3 class="anchored" data-anchor-id="interactive-prediction-with-shiny-application">3.2 Interactive Prediction with Shiny Application</h3>
+<p>The developed Shiny application provides a user-friendly interface for deploying the trained CoxBoost model. Functionality is divided into 4 tabs. The home tab contains general information on the group, including links to the GitHub repository and the datasets used. The EDA tab contains visualisations on trends in the data without a specific focus on the implemented CoxBoost model. The model tab contains the key performance metrics used to assess the models predictive capability. Finally, the predict tab allows clinicians or researchers to upload gene expression data for a new patient (in the form of a CSV file with gene IDs and expression values) and produces personalised survival predictions. The output includes a quantitative risk score, classification into a high- or low-risk group, an estimated median survival, identification of the key genes contributing to the patient’s risk profile and the ability to get the predicted probability of survival at a specific timepoint. This tool translates the complex modelling pipeline into an accessible format for potential research or illustrative clinical use.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="assets/app_screenshot.png" class="img-fluid figure-img"></p>
+<figcaption>Figure 5: Model page in Shiny application</figcaption>
+</figure>
+</div>
+</section>
+</section>
+<section id="discussion" class="level2">
+<h2 class="anchored" data-anchor-id="discussion">4. Discussion</h2>
+<section id="model-selection" class="level3">
+<h3 class="anchored" data-anchor-id="model-selection">4.1 Model selection</h3>
+<p>The ultimate goal of this study was to predict patient survival time using gene expression data. However, two major challenges were encountered during the model selection process. Firstly, the dataset contained nearly 30,000 gene variables, resulting in extremely high dimensionality. Additionally, the survival data was right-censored, meaning that some patients were still alive at the end of the follow-up period, so it was only known that they survived up to a certain point rather than their exact survival time.&nbsp;</p>
+<p>In the context of such high-dimensional and right-censored data, traditional methods such as Principal Component Analysis (PCA) and Penalised Cox, the model initially implemented, can easily lead to overfitting. Furthermore, processing such high-dimensional data could also result in a large computational burden(Salerno &amp; Li, 2022). To address these issues, based on a 2020 study by Spooner et al, the alternative approach of a CoxBoost model was deemed most suitable to ensure predictive accuracy and reduce the risk of overfitting.</p>
+</section>
+<section id="limitations" class="level3">
+<h3 class="anchored" data-anchor-id="limitations">4.2 Limitations</h3>
+<p>Whilst the model demonstrates promising predictive capabilities, there are several limitations to acknowledge. From a biomedical perspective, retrospective datasets can introduce biases related to patient selection. The combined sample size was also relatively small, limiting the statistical power and running the risk of overfitting despite our validation techniques employed. Furthermore, the datasets might not be reflective of the diverse pancreatic cancer population, restricting the generalisability of our findings. The lack of covariates such as cancer stage, gender and age may mean that our model has not picked up on some crucial survival indicators, limiting its predictive capability.</p>
+<p>It is also important to note that the gene expression data used in this study are static snapshots recorded at a point in time, and are unable to capture the dynamic and progressive nature of tumour cells as patients progress through pancreatic cancer. This limitation restricts the model’s ability to adapt to changes in gene expression associated with treatment response or tumour evolution, which are critical factors for prognosis.</p>
+<p>Another limitation lies in the quality and completeness of clinical annotations accompanying the gene expression data. Many public datasets, including those used in this study, often lack comprehensive and standardised clinical metadata such as treatment regimens, comorbidities, and long-term follow-up outcomes. This scarcity of detailed contextual information may limit the model’s ability to adjust for confounding factors, thereby affecting the accuracy and clinical relevance of the survival predictions.</p>
+</section>
+<section id="future-work" class="level3">
+<h3 class="anchored" data-anchor-id="future-work">4.3 Future Work</h3>
+<p>These limitations can be addressed by future research or studies undertaken. From a clinical standpoint, improving robustness and generalisability of the CoxBoost model and feature selection in larger cohorts is necessary. Complementary data such as imaging data of the tumour samples, blood tissue data or covariates like tumour stage and gender, could enhance the predictive framework and improve accuracy and precision.&nbsp;</p>
+<p>From a data science viewpoint, sophisticated modelling approaches such as ensemble methods, deep learning, time-varying or dynamic survival models may be able to more accurately recreate the fluid and nonlinear interactions present in pancreatic cancer biology. The interpretability of individual predictions could be improved by implementing certain modern AI techniques like SHAP or LIME, which could increase clinician confidence in the predictions made by the model. Better batch effect correction strategies may reduce the technical biases from the integration of data from multiple sources.&nbsp;</p>
+<p>Future improvements to the Shiny application could enhance its usability and analytical capabilities. From an accessibility perspective, an enhanced user interface, including tool tips and guided walkthroughs, could improve usability, particularly for non-technical users. Furthermore, a particularly valuable extension would be to enable the simultaneous upload of multiple CSV files to compare expressions and predicted probabilities between individuals or cohorts. This could be done through visualisations such as an overlaid or mirrored radar chart. Overall, these additions would support more interactive exploration and comparative analysis, broadening the application’s clinical and research utility.</p>
+</section>
+</section>
+<section id="conclusion" class="level2">
+<h2 class="anchored" data-anchor-id="conclusion">5. Conclusion</h2>
+<p>In conclusion, this project developed a reproducible data exploration into survival analysis. It used Random Survival Forest-based feature selection with CoxBoost survival modelling to generate a deployed model based on significant gene expressions for pancreatic cancer. The model demonstrated strong predictive performance in the given independent test data and was deployed as an interactive Shiny application for stakeholders. While limitations relating to data uniformity, sample size, and model assumptions exist, this project provides a solid foundation for future efforts in pancreatic cancer research. This work marks a starting point for further improvements to predictive modelling for cancer and further exploration of the biological importance of the identified gene expressions.</p>
+</section>
+<section id="appendix" class="level2">
+<h2 class="anchored" data-anchor-id="appendix">6. Appendix</h2>
+<section id="student-contributions" class="level3">
+<h3 class="anchored" data-anchor-id="student-contributions">6.1 Student Contributions</h3>
+<section id="dylan-herdan" class="level4">
+<h4 class="anchored" data-anchor-id="dylan-herdan">6.1.1 Dylan Herdan</h4>
+<p>Dylan was primarily responsible for implementation of the Shiny app. This included server logic (eg CSV uploads and prediction handling) as well as the UI (layout, tab structure, visualisations). He led early data exploration, transitioned from the Penalised Cox to the CoxBoost model and implemented feature selection and hyperparameter tuning. Dylan also integrated code from other team members into a cohesive pipeline and helped collate, edit, finalise and submit the final report.</p>
+</section>
+<section id="jaijun-zhao" class="level4">
+<h4 class="anchored" data-anchor-id="jaijun-zhao">6.1.2 Jaijun Zhao</h4>
+<p>Jiajun contributed to drafting the report, focusing on model evaluation using C-index and cross-validation. He also provided feedback on model selection and summarised model performance in the slides, linking it to the Shiny app. and ensuring a clear transition to the Shiny application demonstration.</p>
+</section>
+<section id="shuhan-chen" class="level4">
+<h4 class="anchored" data-anchor-id="shuhan-chen">6.1.3 Shuhan Chen</h4>
+<p>Shuhan contributed to the project’s analytical depth by performing more extensive Exploratory Data Analysis (EDA), including generating key visualisations like PCA plots and heatmaps. Shuhan was responsible for implementing the data splitting strategy for training and testing sets and calculating the confusion matrix for model performance assessment. Shuhan also played a role in drafting and editing sections of the final report.</p>
+</section>
+<section id="cherry-fan" class="level4">
+<h4 class="anchored" data-anchor-id="cherry-fan">6.1.4 Cherry Fan</h4>
+<p>Cherry contributed to the initial exploratory data analysis (EDA), preparing key insights and visualisations that informed subsequent modelling decisions. She created and refined presentation slides to effectively communicate the project’s findings and methodologies. Additionally, Cherry assisted with the editing and finalisation of the project report, ensuring clarity and cohesion in both technical and narrative elements.</p>
+</section>
+<section id="ashley-wang" class="level4">
+<h4 class="anchored" data-anchor-id="ashley-wang">6.1.5 Ashley Wang</h4>
+<p>Ashley helped to write the draft and edit the report, as well as provide feedback on sections written by other members of the group. She helped to find preliminary datasets that were potential candidates for this project, as well as investigating survival analysis on R. She was also responsible for assisting with the exploratory data analysis, including combining the datasets and performing some basic data collection cleaning, visualisations and interpretations.&nbsp;</p>
+</section>
+<section id="zhantao-shi" class="level4">
+<h4 class="anchored" data-anchor-id="zhantao-shi">6.1.6 Zhantao Shi</h4>
+<p>Zhantao was responsible for the survival analysis modelling section of the report. He assisted in training models using R, including the Penalised Cox model, and provided detailed textual explanations for the charts presented in the Shiny app.</p>
+</section>
+</section>
+<section id="bibliography" class="level3">
+<h3 class="anchored" data-anchor-id="bibliography">6.2 Bibliography</h3>
+<p>University of Utah Health. (2019, March 12). Why is pancreatic cancer so deadly? University of Utah Health.<a href="https://healthcare.utah.edu/healthfeed/2019/03/why-pancreatic-cancer-so-deadly" class="uri">https://healthcare.utah.edu/healthfeed/2019/03/why-pancreatic-cancer-so-deadly</a></p>
+<p>Newhook, T. E., Blais, E. M., Lindberg, J. M., Adair, S. J., Xin, W., Lee, J. K., Papin, J. A., Parsons, J. T., &amp; Bauer, T. W. (2014). A thirteen-gene expression signature predicts survival of patients with pancreatic cancer and identifies new genes of interest. PloS one, 9(9), e105631</p>
+<p>Stephan Seifert, Sven Gundlach, Silke Szymczak, Surrogate minimal depth as an importance measure for variables in random forests, Bioinformatics, Volume 35, Issue 19, October 2019, Pages 3663–3671, <a href="https://doi.org/10.1093/bioinformatics/btz149" class="uri">https://doi.org/10.1093/bioinformatics/btz149</a></p>
+<p>Simon, N., Friedman, J., Hastie, T., &amp; Tibshirani, R. (2011). Regularization paths for Cox’s proportional Hazards model via Coordinate Descent. Journal of Statistical Software, 39(5). https://doi.org/10.18637/jss.v039.i05</p>
+<p>Bair, E., Hastie, T., Paul, D., &amp; Tibshirani, R. (2006). Prediction by supervised principal components. Journal of the American Statistical Association, 101(473), 119–137. <a href="https://doi.org/10.1198/016214505000000628" class="uri">https://doi.org/10.1198/016214505000000628</a>&nbsp;</p>
+<p>Salerno, S., &amp; Li, Y. (2022). High-Dimensional survival Analysis: methods and applications. Annual Review of Statistics and Its Application, 10(1), 25–49. <a href="https://doi.org/10.1146/annurev-statistics-032921-022127" class="uri">https://doi.org/10.1146/annurev-statistics-032921-022127</a></p>
+<p>Spooner, A., Chen, E., Sowmya, A. et al.&nbsp;A comparison of machine learning methods for survival analysis of high-dimensional clinical data for dementia prediction. Sci Rep 10, 20410 (2020). <a href="https://doi.org/10.1038/s41598-020-77220-w" class="uri">https://doi.org/10.1038/s41598-020-77220-w</a>&nbsp;</p>
+<p>He, Z., Yang, C., He, Y., Gong, B., Yin, C., Feng, J., Chen, L., Tang, J., &amp; Chen, Y. (2020). CAMTA1, a novel antitumor gene, regulates proliferation and the cell cycle in glioma by inhibiting AKT phosphorylation. Cellular Signalling, 79, 109882. <a href="https://doi.org/10.1016/j.cellsig.2020.109882" class="uri">https://doi.org/10.1016/j.cellsig.2020.109882</a></p>
+<p>Wang, Y., Zheng, S., Gao, H., Wang, Y., Chen, Y., &amp; Han, A. (2025). DNA methylation-induced suppression of PRDM16 in colorectal cancer metastasis through the PPARγ/EMT pathway. Cellular Signalling, 111634. <a href="https://doi.org/10.1016/j.cellsig.2025.111634" class="uri">https://doi.org/10.1016/j.cellsig.2025.111634</a></p>
+<p>Posta M, Győrffy B. (2023). Analysis of a large cohort of pancreatic cancer transcriptomic profiles to reveal the strongest prognostic factors. Clin Transl Sci. <a href="https://doi.org/10.1111/cts.13563" class="uri">https://doi.org/10.1111/cts.13563</a></p>
+</section>
+<section id="code" class="level3">
+<h3 class="anchored" data-anchor-id="code">6.3 Code</h3>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract useful data from GEO object</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>extract_gse_data <span class="ot">&lt;-</span> <span class="cf">function</span>(gse) {</span>
@@ -251,14 +372,6 @@ C:/Users/dylan/Documents/DATA3888/GEO_data/GPL6244.soft.gz </code></pre>
 <span id="cb13-59"><a href="#cb13-59" aria-hidden="true" tabindex="-1"></a>  <span class="at">eMat =</span> combined_matrix</span>
 <span id="cb13-60"><a href="#cb13-60" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-</section>
-<section id="exploratory-data-analysis" class="level3">
-<h3 class="anchored" data-anchor-id="exploratory-data-analysis">2.2 Exploratory Data Analysis</h3>
-<p><strong>Summary Statistics:</strong>&nbsp;Descriptive statistics such as mean, median, quantiles for gene expression distributions were computed per sample and potential outliers were identified.</p>
-<p><strong>Principal Component Analysis:</strong>&nbsp;PCA was done on scaled, transposed expression data to help visualize sample clustering and detect batch effects or dataset-specific biases.</p>
-<p><strong>Heatmaps:</strong>&nbsp;Expression patterns of the top 75 most variable genes were visualized via heatmaps annotated by survival status to reveal patterns associated with this covariate.</p>
-<p><strong>Survival Visualization:</strong> Kaplan-Meier curves were plotted for the overall cohort, and potentially stratified by dataset, to visualize the survival probability over time.</p>
-<p><strong>Differential Expression:</strong>&nbsp;Limma-based differential expression analysis contrasted deceased vs.&nbsp;surviving patients, with results depicted using volcano plots to highlight prognostic candidate genes.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Applying summary function across samples</span></span>
 <span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>summary_values_eda <span class="ot">&lt;-</span> <span class="fu">summary</span>(<span class="fu">as.vector</span>(gse<span class="sc">$</span>eMat))</span>
@@ -337,9 +450,6 @@ C:/Users/dylan/Documents/DATA3888/GEO_data/GPL6244.soft.gz </code></pre>
 <span id="cb14-75"><a href="#cb14-75" aria-hidden="true" tabindex="-1"></a>survival_time_data <span class="ot">&lt;-</span> <span class="fu">prepare_survival_time_data</span>()</span>
 <span id="cb14-76"><a href="#cb14-76" aria-hidden="true" tabindex="-1"></a>volcano_data <span class="ot">&lt;-</span> <span class="fu">prepare_volcano_data</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-</section>
-<section id="feature-selection" class="level3">
-<h3 class="anchored" data-anchor-id="feature-selection">2.3 Feature Selection</h3>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Construct survival object with survival time and event status</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>surv_obj <span class="ot">&lt;-</span> <span class="fu">with</span>(gse<span class="sc">$</span>phenoData, <span class="fu">Surv</span>(<span class="fu">as.numeric</span>(months_survived), <span class="fu">as.numeric</span>(is_dead)))</span>
@@ -398,9 +508,6 @@ C:/Users/dylan/Documents/DATA3888/GEO_data/GPL6244.soft.gz </code></pre>
 <span id="cb15-55"><a href="#cb15-55" aria-hidden="true" tabindex="-1"></a>selected_features <span class="ot">&lt;-</span> top_by_md[<span class="dv">1</span><span class="sc">:</span><span class="fu">min</span>(n_features_to_select,</span>
 <span id="cb15-56"><a href="#cb15-56" aria-hidden="true" tabindex="-1"></a>                                     <span class="fu">length</span>(top_by_md))]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-</section>
-<section id="coxboost-model-development" class="level3">
-<h3 class="anchored" data-anchor-id="coxboost-model-development">2.4 CoxBoost Model Development</h3>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Prepare data for CoxBoost with selected features only</span></span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>X_train_selected <span class="ot">&lt;-</span> X_train[, selected_features, drop <span class="ot">=</span> <span class="cn">FALSE</span>]</span>
@@ -505,15 +612,6 @@ C:/Users/dylan/Documents/DATA3888/GEO_data/GPL6244.soft.gz </code></pre>
 <span id="cb16-101"><a href="#cb16-101" aria-hidden="true" tabindex="-1"></a>  <span class="at">positive =</span> <span class="st">"High"</span></span>
 <span id="cb16-102"><a href="#cb16-102" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-</section>
-</section>
-<section id="results" class="level2">
-<h2 class="anchored" data-anchor-id="results">3. Results</h2>
-<section id="hyperparameter-tuning" class="level3">
-<h3 class="anchored" data-anchor-id="hyperparameter-tuning">3.1 <strong>Hyperparameter Tuning</strong></h3>
-</section>
-<section id="model-performance-metrics" class="level3">
-<h3 class="anchored" data-anchor-id="model-performance-metrics">3.2 Model Performance Metrics</h3>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>prepare_survival_data <span class="ot">&lt;-</span> <span class="cf">function</span>() {</span>
 <span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">data.frame</span>(</span>
@@ -543,7 +641,7 @@ C:/Users/dylan/Documents/DATA3888/GEO_data/GPL6244.soft.gz </code></pre>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="Biomed8-report_files/figure-html/results_km-1.png" class="img-fluid figure-img" width="672"></p>
+<p><img src="Biomed8Report_files/figure-html/results_km-1.png" class="img-fluid figure-img" width="672"></p>
 </figure>
 </div>
 </div>
@@ -594,7 +692,7 @@ C:/Users/dylan/Documents/DATA3888/GEO_data/GPL6244.soft.gz </code></pre>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="Biomed8-report_files/figure-html/results_time_auc-1.png" class="img-fluid figure-img" width="672"></p>
+<p><img src="Biomed8Report_files/figure-html/results_time_auc-1.png" class="img-fluid figure-img" width="672"></p>
 </figure>
 </div>
 </div>
@@ -657,72 +755,75 @@ C:/Users/dylan/Documents/DATA3888/GEO_data/GPL6244.soft.gz </code></pre>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="Biomed8-report_files/figure-html/results_brier-1.png" class="img-fluid figure-img" width="672"></p>
+<p><img src="Biomed8Report_files/figure-html/results_brier-1.png" class="img-fluid figure-img" width="672"></p>
 </figure>
 </div>
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>extract_gene_symbol <span class="ot">&lt;-</span> <span class="cf">function</span>(gene_assignment) {</span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  parts <span class="ot">&lt;-</span> <span class="fu">strsplit</span>(gene_assignment, <span class="st">" // "</span>)[[<span class="dv">1</span>]]</span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">length</span>(parts) <span class="sc">&gt;=</span> <span class="dv">2</span>) <span class="fu">return</span>(<span class="fu">trimws</span>(parts[<span class="dv">2</span>])) <span class="cf">else</span> <span class="fu">return</span>(<span class="cn">NA</span>)</span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>coefs <span class="ot">&lt;-</span> <span class="fu">coef</span>(coxboost_model)[selected_features]</span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>coef_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">feature =</span> selected_features,</span>
-<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">coefficient =</span> coefs,</span>
-<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
-<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
-<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">original_id =</span> lookup<span class="sc">$</span>raw[<span class="fu">match</span>(feature, lookup<span class="sc">$</span>safe)],</span>
-<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">gene_info =</span> GSE28735<span class="sc">$</span>featureData<span class="sc">$</span>gene_assignment[<span class="fu">match</span>(original_id, <span class="fu">rownames</span>(GSE28735<span class="sc">$</span>featureData))],</span>
-<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">gene_symbol =</span> <span class="fu">sapply</span>(gene_info, extract_gene_symbol, <span class="at">USE.NAMES =</span> <span class="cn">FALSE</span>),</span>
-<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">display_name =</span> <span class="fu">ifelse</span>(<span class="sc">!</span><span class="fu">is.na</span>(gene_symbol), </span>
-<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>                          <span class="fu">paste0</span>(gene_symbol, <span class="st">" ("</span>, feature, <span class="st">")"</span>), </span>
-<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>                          feature),</span>
-<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">impact =</span> <span class="fu">ifelse</span>(coefficient <span class="sc">&gt;</span> <span class="dv">0</span>, <span class="st">"Risk (Worse Survival)"</span>, <span class="st">"Protective (Better Survival)"</span>),</span>
-<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">abs_coef =</span> <span class="fu">abs</span>(coefficient)</span>
-<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(abs_coef))</span>
-<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(coef_df, <span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">reorder</span>(display_name, abs_coef), <span class="at">y =</span> coefficient, <span class="at">fill =</span> impact)) <span class="sc">+</span></span>
-<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">stat =</span> <span class="st">"identity"</span>) <span class="sc">+</span></span>
-<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Protective (Better Survival)"</span> <span class="ot">=</span> <span class="st">"#2E9FDF"</span>, </span>
-<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a>                               <span class="st">"Risk (Worse Survival)"</span> <span class="ot">=</span> <span class="st">"#E7B800"</span>)) <span class="sc">+</span></span>
-<span id="cb20-29"><a href="#cb20-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
-<span id="cb20-30"><a href="#cb20-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
-<span id="cb20-31"><a href="#cb20-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Feature Importance in CoxBoost Survival Model"</span>,</span>
-<span id="cb20-32"><a href="#cb20-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Top genes ranked by effect size"</span>,</span>
-<span id="cb20-33"><a href="#cb20-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">""</span>, <span class="at">y =</span> <span class="st">"Coefficient"</span>,</span>
-<span id="cb20-34"><a href="#cb20-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill =</span> <span class="st">"Impact"</span></span>
-<span id="cb20-35"><a href="#cb20-35" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
-<span id="cb20-36"><a href="#cb20-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>() <span class="sc">+</span></span>
-<span id="cb20-37"><a href="#cb20-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
-<span id="cb20-38"><a href="#cb20-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.position =</span> <span class="st">"bottom"</span>,</span>
-<span id="cb20-39"><a href="#cb20-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">axis.text.y =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">10</span>),</span>
-<span id="cb20-40"><a href="#cb20-40" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">16</span>, <span class="at">face =</span> <span class="st">"bold"</span>),</span>
-<span id="cb20-41"><a href="#cb20-41" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">12</span>)</span>
-<span id="cb20-42"><a href="#cb20-42" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">"IBS: "</span>, brier_results<span class="sc">$</span>ibs_value, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">"C-Index: "</span>, c_index, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>,</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Optimal Boosting Steps: "</span>, optimal_steps, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>IBS:  0.1444313 
+ C-Index:  0.7218543 
+ Optimal Boosting Steps:  7 </code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>extract_gene_symbol <span class="ot">&lt;-</span> <span class="cf">function</span>(gene_assignment) {</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  parts <span class="ot">&lt;-</span> <span class="fu">strsplit</span>(gene_assignment, <span class="st">" // "</span>)[[<span class="dv">1</span>]]</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">length</span>(parts) <span class="sc">&gt;=</span> <span class="dv">2</span>) <span class="fu">return</span>(<span class="fu">trimws</span>(parts[<span class="dv">2</span>])) <span class="cf">else</span> <span class="fu">return</span>(<span class="cn">NA</span>)</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>coefs <span class="ot">&lt;-</span> <span class="fu">coef</span>(coxboost_model)[selected_features]</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>coef_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">feature =</span> selected_features,</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">coefficient =</span> coefs,</span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">original_id =</span> lookup<span class="sc">$</span>raw[<span class="fu">match</span>(feature, lookup<span class="sc">$</span>safe)],</span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">gene_info =</span> GSE28735<span class="sc">$</span>featureData<span class="sc">$</span>gene_assignment[<span class="fu">match</span>(original_id, <span class="fu">rownames</span>(GSE28735<span class="sc">$</span>featureData))],</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">gene_symbol =</span> <span class="fu">sapply</span>(gene_info, extract_gene_symbol, <span class="at">USE.NAMES =</span> <span class="cn">FALSE</span>),</span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">display_name =</span> <span class="fu">ifelse</span>(<span class="sc">!</span><span class="fu">is.na</span>(gene_symbol), </span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>                          <span class="fu">paste0</span>(gene_symbol, <span class="st">" ("</span>, feature, <span class="st">")"</span>), </span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>                          feature),</span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">impact =</span> <span class="fu">ifelse</span>(coefficient <span class="sc">&gt;</span> <span class="dv">0</span>, <span class="st">"Risk (Worse Survival)"</span>, <span class="st">"Protective (Better Survival)"</span>),</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">abs_coef =</span> <span class="fu">abs</span>(coefficient)</span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(abs_coef))</span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(coef_df, <span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">reorder</span>(display_name, abs_coef), <span class="at">y =</span> coefficient, <span class="at">fill =</span> impact)) <span class="sc">+</span></span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_bar</span>(<span class="at">stat =</span> <span class="st">"identity"</span>) <span class="sc">+</span></span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Protective (Better Survival)"</span> <span class="ot">=</span> <span class="st">"#2E9FDF"</span>, </span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>                               <span class="st">"Risk (Worse Survival)"</span> <span class="ot">=</span> <span class="st">"#E7B800"</span>)) <span class="sc">+</span></span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb22-31"><a href="#cb22-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Feature Importance in CoxBoost Survival Model"</span>,</span>
+<span id="cb22-32"><a href="#cb22-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Top genes ranked by effect size"</span>,</span>
+<span id="cb22-33"><a href="#cb22-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">""</span>, <span class="at">y =</span> <span class="st">"Coefficient"</span>,</span>
+<span id="cb22-34"><a href="#cb22-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill =</span> <span class="st">"Impact"</span></span>
+<span id="cb22-35"><a href="#cb22-35" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb22-36"><a href="#cb22-36" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>() <span class="sc">+</span></span>
+<span id="cb22-37"><a href="#cb22-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
+<span id="cb22-38"><a href="#cb22-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.position =</span> <span class="st">"bottom"</span>,</span>
+<span id="cb22-39"><a href="#cb22-39" aria-hidden="true" tabindex="-1"></a>    <span class="at">axis.text.y =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">10</span>),</span>
+<span id="cb22-40"><a href="#cb22-40" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">16</span>, <span class="at">face =</span> <span class="st">"bold"</span>),</span>
+<span id="cb22-41"><a href="#cb22-41" aria-hidden="true" tabindex="-1"></a>    <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">12</span>)</span>
+<span id="cb22-42"><a href="#cb22-42" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="Biomed8-report_files/figure-html/results_feature_importance-1.png" class="img-fluid figure-img" width="672"></p>
+<p><img src="Biomed8Report_files/figure-html/results_feature_importance-1.png" class="img-fluid figure-img" width="672"></p>
 </figure>
 </div>
 </div>
 </div>
 </section>
-<section id="interactive-prediction-with-shiny-application" class="level3">
-<h3 class="anchored" data-anchor-id="interactive-prediction-with-shiny-application">3.3 Interactive Prediction with Shiny Application</h3>
-</section>
-</section>
-<section id="discussion" class="level2">
-<h2 class="anchored" data-anchor-id="discussion">4. Discussion</h2>
-</section>
-<section id="limitations" class="level2">
-<h2 class="anchored" data-anchor-id="limitations">5. Limitations</h2>
 </section>
 
 </main>

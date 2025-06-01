@@ -408,7 +408,7 @@ surv_diff <- survdiff(Surv(time, status) ~ risk_group, data = km_data)
 p_val <- 1 - pchisq(surv_diff$chisq, df = length(surv_diff$n) - 1)
 p_text <- ifelse(p_val < 0.001, "p < 0.001", paste("p =", round(p_val, 3)))
 
-ggsurvplot(
+km_plot <- ggsurvplot(
   surv_fit, data = km_data,
   pval = p_text, risk.table = FALSE,
   palette = c("#2E9FDF", "#E7B800"),
@@ -419,6 +419,8 @@ ggsurvplot(
   ggtheme = theme_bw(), conf.int = TRUE,
   censor.shape = "+", censor.size = 4
 )
+ggsave("km_survival_plot.png", plot = km_plot$plot)
+
 ```
 
 ```{r results_time_auc}
@@ -455,7 +457,7 @@ prepare_time_auc_data <- function() {
 
 plot_data <- prepare_time_auc_data()
 
-ggplot(plot_data, aes(time, auc)) +
+auc_plot <- ggplot(plot_data, aes(time, auc)) +
   geom_line(colour = "#2E9FDF", linewidth = 1) +
   geom_ribbon(aes(ymin = lower, ymax = upper), fill = "#2E9FDF", alpha = .2) +
   geom_hline(yintercept = .5, linetype = "dashed", colour = "grey50") +
@@ -464,6 +466,8 @@ ggplot(plot_data, aes(time, auc)) +
   theme_bw() +
   labs(title = "Time-dependent AUC (Test Set)",
        x = "Months Since Diagnosis", y = "AUC")
+ggsave("AUC_plot.png", plot = auc_plot)
+
 ```
 
 ```{r results_brier}
@@ -513,7 +517,7 @@ calculate_brier_score <- function() {
 brier_results <- calculate_brier_score()
 brier_df <- brier_results$brier_df
 
-ggplot(brier_df, aes(time, brier)) +
+brier_plot <- ggplot(brier_df, aes(time, brier)) +
   geom_line(colour = "#2E9FDF", linewidth = 1) +
   geom_hline(yintercept = .25, linetype = "dashed", colour = "grey60") +
   coord_cartesian(ylim = c(0, 1)) +
@@ -521,6 +525,7 @@ ggplot(brier_df, aes(time, brier)) +
   theme_bw() +
   labs(title = "Time-dependent Brier Score (Test Set)",
        x = "Months Since Diagnosis", y = "Brier Score")
+
 ```
 
 ```{r results_feature_importance}
@@ -548,7 +553,7 @@ coef_df <- data.frame(
   ) %>%
   arrange(desc(abs_coef))
 
-ggplot(coef_df, aes(x = reorder(display_name, abs_coef), y = coefficient, fill = impact)) +
+feat_imp <- ggplot(coef_df, aes(x = reorder(display_name, abs_coef), y = coefficient, fill = impact)) +
   geom_bar(stat = "identity") +
   scale_fill_manual(values = c("Protective (Better Survival)" = "#2E9FDF", 
                                "Risk (Worse Survival)" = "#E7B800")) +
@@ -566,4 +571,6 @@ ggplot(coef_df, aes(x = reorder(display_name, abs_coef), y = coefficient, fill =
     plot.title = element_text(size = 16, face = "bold"),
     plot.subtitle = element_text(size = 12)
   )
+ggsave("feature_importance_coxboost.png", plot = feat_imp)
+
 ```
