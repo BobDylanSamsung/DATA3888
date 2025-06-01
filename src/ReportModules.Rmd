@@ -1,10 +1,8 @@
 ---
-title: "Biomed8 Group Report"
-format: html
-editor: visual
-output:
-  html_document:
-    code_folding: hide
+title: "Report Modules"
+author: "Biomed 8"
+date: "2025-06-01"
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
@@ -15,7 +13,6 @@ library(dplyr)
 library(GEOquery)
 library(ggplot2)
 library(glmnet)
-library(Hmisc)
 library(limma)
 library(randomForestSRC)
 library(pec)
@@ -54,41 +51,9 @@ predictRisk.CoxBoost <- function(object, newdata, times, ...) {
 }
 ```
 
-## Executive Summary
 
-Improved prognostic tools are needed to guide the treatment of pancreatic cancer, which has one of the highest mortality rates in the world. (University of Utah Health, 2019) This project addresses this hurdle by using gene expression data to develop a personalised survival prediction tool for clinicians’ patients. Our approach utilises Gene Expression Omnibus datasets, which are publicly available, to identify biomarkers and develop a robust predictive model for pathologists.
 
-Our main findings were the identification of select significant genes from an initial pool of over 28,000 genes using a minimum depth Random Forest. The selected genes were most predictive of survival in cancer patients. Subsequently, a CoxBoost model was trained and optimised on the selected features through hyperparameter tuning. Model performance was evaluated using an independent test set and measured primarily by the integrated Brier score (IBS). The concordance index, also known as the C-index and the time-dependent area under the ROC curve, was also used.
-
-This analysis holds practical relevance in its potential to increase the efficiency of clinicians. It involves risk stratification by providing personalised and interpretable patient survival predictions. The model output includes risk scores, risk groups, estimated survival probability over time, and identifies which genes contribute most significantly to risk predictions. A comprehensive shiny app was also developed to enable ease of use, allowing users to input CSV files and receive a personalised risk assessment.
-
-![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXeVkM2be9NYpyjNa30ed4mPUY_DC3DYW_E7hVzF5Zo17VMmceVinUCzABdJg5AetpKw66MAdEaUQagUnfOUjh-cOkAWTrLOIgMKjyOew1jLoA1a2DXaNjHhva36pZ14OCSuLH0nJg?key=h0lqVXV4wbQ-tA231VWPSw)
-
-**Figure 1: Flowchart diagram outlining the entire project pipeline from processing data to predicting survival results**
-
-## 1. Background
-
-Infamous amongst cancers for its commonly late diagnosis and poor survival prognosis, there is a crucial need for improved tools to predict outcomes and support personalised treatment for pancreatic cancer patients. Gene expression profiling has emerged as a promising approach for identifying biomarkers that can help guide clinical decisions for treatment and care (Newhook et al., 2014). However, the dimensionality of gene expression data poses a significant analytical hurdle. The risks include overfitting, a heavy computational load, and difficulty in interpreting the results.
-
-This project aimed to develop a robust survival prediction model using gene expression data from tumorous tissue samples. The goal was to improve patient care by generating interpretable insights for pathologists, clinicians and researchers from high-dimensional gene expression data using machine learning techniques. The resulting Shiny app was specifically designed to provide pathologists with an intuitive and practical tool to support decision-making in cancer prognosis and patient management.
-
-Data for this project was sourced from the Gene Expression Omnibus (GEO), a public repository containing data for various outlets of research. We selected two datasets, GSE28735, GSE62452, which contained 45 and 69 tumour samples, respectively. Using the R package GEOquery, the phenotype data were cleaned and standardised to unify survival endpoints and filtered to retain tumour samples with complete follow-up. Expression matrices were merged by intersecting genes, yielding a combined dataset of 105samples and28,000+genes. A holdout set of four samples was reserved for external validation, while the remaining data was partitioned to ensure robust model training, testing and validation.
-
-The CoxBoost model was chosen for this report due to its ability to handle high dimensional data. CoxBoost is a survival analysis approach that combines boosting with Cox proportional hazards regression. Boosting is an iterative modelling strategy that continuously adds simple models to gradually correct the errors or deficiencies generated in the previous iteration, thereby continuously improving prediction accuracy. Specifically, in each iteration, the direction for the next optimisation is determined based on the deficiencies of the current model, and a new model is trained to make up for these deficiencies, ultimately forming an overall model with better comprehensive performance(Simon et al., 2011).
-
-CoxBoost precisely combines this boosting strategy with Cox regression. It can not only handle the right deletion problem in survival data very well, but also deal with the common modelling instability problem in high-dimensional data. Compared with the traditional Cox regression, CoxBoost can maintain good stability and predictive performance even when the number of variables is much greater than the number of samples (Bair et al., 2006).
-
-## 2. Method
-
-This project encompassed multiple stages, beginning with data preprocessing and exploratory data analysis. Subsequently, feature selection was conducted alongside the development and hyperparameter tuning of survival prediction models. Following the construction of a preliminary model, rigorous evaluation was performed using a range of performance metrics. Finally, the refined model was deployed as an interactive Shiny web application, providing a user-friendly platform to demonstrate the final product. All analyses were conducted in R, leveraging a diverse suite of CRAN and Bioconductor packages.
-
-### 2.1 Data Preprocessing
-
-Gene expression and clinical data for our two datasets were loaded into the R Studio environment through the GEOquery R package. The datasets contained data on both pancreatic cancer samples, including the gene expression values, as well as clinical phenotype information regarding the patients. The first step taken was to align our phenotype data for uniformity across the datasets, specifically the outcome variables denoted by event status (is_dead) and survival time (months_survived) and non-tumour samples were removed, ensuring that only tumour samples with complete survival status information were retained. This step was important to enable easier merging and consistency of data between the two datasets later on. 
-
-Following standardisation, the cleaned gene expression matrices from both datasets were merged based on shared gene symbol identifiers to create a unified dataset. Expression values were log-transformed and viewed to confirm normalised consistency. Finally, the combined dataset was partitioned into training (60%), validation (20%), and test (20%) sets using stratified sampling to maintain balanced proportions and unbiased model evaluation. This stratified sampling method was used to maintain unbiased model evaluation and validate that the model performed well on new, unseen gene expression profiles from patients.
-
-```{r method_data_preprocessing}
+```{r load_data}
 # Extract useful data from GEO object
 extract_gse_data <- function(gse) {
   list(
@@ -182,12 +147,6 @@ gse <- list(
 )
 ```
 
-### 2.2 Exploratory Data Analysis
-
-To better understand the structure of the datasets, summary statistics, including mean, median, and quantiles, were calculated for each gene’s expression data across all samples to visualise the data and identify potential outliers. Principal Component Analysis (PCA) was performed on the transposed expression matrix to visualise clustering of classes, as it helps reduce dimensionality while retaining the linear combination of variables with the highest variance. To further explore and understand the data, a heatmap of the 75 most variable genes was generated, with samples annotated by survival status to investigate patterns that might be associated with survival status outcomes. The output from the heatmap allowed for visual inspection of whether certain genes exhibited differential expression correlating with survival status. 
-
-Additionally, the limma package was used to compare gene expression between deceased and surviving patients. The results were summarised in a volcano plot highlighting the spread of genes based on statistical significance, thereby aiding in the identification of relevant genes for our survival predictions.
-
 ```{r method_eda}
 # Applying summary function across samples
 summary_values_eda <- summary(as.vector(gse$eMat))
@@ -267,10 +226,6 @@ survival_time_data <- prepare_survival_time_data()
 volcano_data <- prepare_volcano_data()
 ```
 
-### 2.3 Feature Selection
-
-Feature selection was required since gene expression data is often high-dimensional, and these datasets were no exception, with over 30,000 gene expression features, despite relatively few samples. To address this, a minimal-depth random survival forest was employed to identify the most significant genes. Minimal depth measures the depth at which a specific gene is first used within a decision tree split. Genes that congregate closer to the top levels of the tree are seen as more important for predictions. (Seifert, Gundlach, & Szymczak, 2019) The genes were ranked based on their allocated minimal depth scores, and the top 15 genes were selected accordingly. This significantly reduced the feature space, eliminating many noisy features, and hence facilitated a faster and more efficient subsequent modelling process.
-
 ```{r method_select_features}
 # Construct survival object with survival time and event status
 surv_obj <- with(gse$phenoData, Surv(as.numeric(months_survived), as.numeric(is_dead)))
@@ -330,18 +285,6 @@ selected_features <- top_by_md[1:min(n_features_to_select,
                                      length(top_by_md))]
 ```
 
-### 2.4 CoxBoost Model Development
-
-To optimise model performance, a comprehensive grid search was conducted over two key hyperparameters; penalty and step size. The penalty value affects the regularisation applied to the parameter vector in each boosting step to prevent overfitting and ranged from 0 to 50 in increments of 5. Meanwhile, the the stepsize affects the size of each boosting step after a covariate has been selected and took the values of 0.1, 0.3, 0.5, 0.7 and 1.0.
-
-The final model was selected based on the hyperparameter set that achieved the best performance on the test set and then evaluated on a held-out validation set to assess its generalizability. The performance was assessed using two key survival analysis metrics:
-
-**Integrated Brier Score (IBS)**: The IBS reflects the average squared difference between the predicted survival probability and the actual outcome for each individual over time. Lower values indicate better calibration and accuracy of the survival probability estimates for individual patients.
-
-**Concordance Index (C-index)**: The C-index measures the probability that, when comparing two patients, the model correctly identifies the one with the higher risk of an adverse event. Higher values indicate stronger discriminative power between pairs of patients.    
-
-Specifically Integrated Brier Score was minimised whilst maximising the concordance index. While both metrics provide valuable insights, we placed greater emphasis on the IBS score, as it aligned more closely with our project’s goal: to deliver accurate survival probability estimates over time, rather than simply ranking patients relative to each other. This focus on calibration and accuracy was especially relevant for our target users, pathologists, who require precise survival probability estimates to inform patient care.
-
 ```{r method_build_model}
 
 # Prepare data for CoxBoost with selected features only
@@ -365,6 +308,7 @@ penalty_val <- 15
 stepsize <- 0.3
 
 
+message("[INFO]: Calculating optimal boosting steps")
 # Cross validate to find optimal number of boosting steps
 cv_res <- cv.CoxBoost(
   time      = train_time,
@@ -379,7 +323,8 @@ cv_res <- cv.CoxBoost(
 
 # extract optimal steps
 optimal_steps <- cv_res$optimal.step
-
+message("[INFO]: Optimal boosting steps = ", optimal_steps)
+message("[INFO]: Fitting model")
 # Fit final CoxBoost model with the same penalty
 coxboost_model <- CoxBoost(
   time      = train_time,
@@ -447,12 +392,6 @@ cm_caret <- confusionMatrix(
   positive = "High"
 )
 ```
-
-## 3. Results
-
-### 3.1 **Hyperparameter Tuning**
-
-### 3.2 Model Performance Metrics
 
 ```{r results_km}
 prepare_survival_data <- function() {
@@ -628,57 +567,3 @@ ggplot(coef_df, aes(x = reorder(display_name, abs_coef), y = coefficient, fill =
     plot.subtitle = element_text(size = 12)
   )
 ```
-
-### 3.3 Interactive Prediction with Shiny Application
-
-## 4. Discussion
-
-### 4.1 Limitations
-
-### 4.2 Future Work
-
-## 5. Conclusion
-
-## 6. Appendix
-
-### 6.1 Student Contributions
-
-#### 6.1.1 Dylan Herdan
-
-Dylan was primarily responsible for implementation of the Shiny app. This included server logic (eg CSV uploads and prediction handling) as well as the UI (layout, tab structure, visualisations). He led early data exploration, transitioned from the Penalised Cox to CoxBoost model and implemented feature selection and hyperparameter tuning. Dylan also integrated code from other team members into a cohesive pipeline and helped proofread, edit and include the code for the final report.
-
-#### 6.1.2 Jaijun Zhao
-
-Jiajun contributed to drafting the report, focusing on model evaluation using C-index and cross-validation. He also provided feedback on model selection and summarised model performance in the slides, linking it to the Shiny app. and ensuring a clear transition to the Shiny application demonstration.
-
-#### 6.1.3 Shuhan Chen
-
-Shuhan contributed to the project's analytical depth by performing more extensive Exploratory Data Analysis (EDA), including generating key visualisations like PCA plots and heatmaps. Shuhan was responsible for implementing the data splitting strategy for training and testing sets and calculating the confusion matrix for model performance assessment. Shuhan also played a role in drafting and editing sections of the final report.
-
-#### 6.1.4 Cherry Fan
-
-Cherry contributed to the initial exploratory data analysis (EDA), preparing key insights and visualisations that informed subsequent modelling decisions. She created and refined presentation slides to effectively communicate the project’s findings and methodologies. Additionally, Cherry assisted with the editing and finalisation of the project report, ensuring clarity and cohesion in both technical and narrative elements.
-
-#### 6.1.5 Ashley Wang
-
-Ashley helped to write the draft and edit the report, as well as provide feedback on sections written by other members of the group. She helped to find preliminary datasets that were potential candidates for this project, as well as investigating survival analysis on R. She was also responsible for assisting with the exploratory data analysis, including combining the datasets and performing some basic data collection cleaning, visualisations and interpretations. 
-
-#### 6.1.6 Zhantao Shi
-
-Zhantao was responsible for the survival analysis modelling section of the report. He assisted in training models using R, including the Penalised Cox model, and provided detailed textual explanations for the charts presented in the Shiny app.
-
-### 6.2 Bibliography
-
-University of Utah Health. (2019, March 12). Why is pancreatic cancer so deadly? University of Utah Health.<https://healthcare.utah.edu/healthfeed/2019/03/why-pancreatic-cancer-so-deadly>
-
-Newhook, T. E., Blais, E. M., Lindberg, J. M., Adair, S. J., Xin, W., Lee, J. K., Papin, J. A., Parsons, J. T., & Bauer, T. W. (2014). A thirteen-gene expression signature predicts survival of patients with pancreatic cancer and identifies new genes of interest. PloS one, 9(9), e105631
-
-Stephan Seifert, Sven Gundlach, Silke Szymczak, Surrogate minimal depth as an importance measure for variables in random forests, Bioinformatics, Volume 35, Issue 19, October 2019, Pages 3663–3671, <https://doi.org/10.1093/bioinformatics/btz149>
-
-Simon, N., Friedman, J., Hastie, T., & Tibshirani, R. (2011). Regularization paths for Cox’s proportional Hazards model via Coordinate Descent. Journal of Statistical Software, 39(5). https://doi.org/10.18637/jss.v039.i05
-
-Bair, E., Hastie, T., Paul, D., & Tibshirani, R. (2006). Prediction by supervised principal components. Journal of the American Statistical Association, 101(473), 119–137. <https://doi.org/10.1198/016214505000000628> 
-
-Salerno, S., & Li, Y. (2022). High-Dimensional survival Analysis: methods and applications. Annual Review of Statistics and Its Application, 10(1), 25–49. <https://doi.org/10.1146/annurev-statistics-032921-022127>
-
-Spooner, A., Chen, E., Sowmya, A. et al. A comparison of machine learning methods for survival analysis of high-dimensional clinical data for dementia prediction. Sci Rep 10, 20410 (2020). <https://doi.org/10.1038/s41598-020-77220-w> 
