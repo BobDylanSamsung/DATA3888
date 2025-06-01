@@ -573,16 +573,6 @@ attach_prediction_outputs <- function(output, input, pred_results, risk_groups, 
       cglwd = 0.8,                               # Grid line width
       title = "Gene Expression Relative to Population"
     )
-    
-    # Add a legend
-    legend(
-      "topright",
-      legend = c("Patient", "Population Average"),
-      col = c("red", rgb(0, 0.6, 0.8)),
-      lwd = 3,
-      cex = 0.8,
-      bty = "n"
-    )
   })
   
   # Clear any previous error message

@@ -134,8 +134,10 @@ render_survival_plots <- function(output, km_data, surv_fit, surv_diff) {
       risk.table = FALSE, palette = c("#2E9FDF", "#E7B800"),
       xlab = "Time (months)", ylab = "Cumulative Hazard",
       title = "Cumulative Hazard by Risk Group",
-      legend.title = "Risk Group", ggtheme = theme_bw(),
-      conf.int = TRUE, censor.shape = "+", censor.size = 4
+      legend.title = "Risk Group", 
+      legend.labs = c("Low Risk", "High Risk"),
+      ggtheme = theme_bw(), conf.int = TRUE, 
+      censor.shape = "+", censor.size = 4
     )$plot
   })
   
